@@ -11,3 +11,8 @@ source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/mm/the_env/bin/activate
 ```
 bash install.sh
 ```
+
+## Download HNC dataset
+```
+git clone https://huggingface.co/datasets/patilli/HNC
+```
