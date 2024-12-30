@@ -1,6 +1,11 @@
-pip install pytorch=3.8
-pip install matplotlib
-pip install pandas>=1.3.0
-pip install numpy>=1.21.0  
-pip install scikit-learn>=0.24.0
-pip install python-dotenv
+pip install numpy pandas matplotlib
+pip install torch torchvision torchaudio
+pip install transformers datasets
+pip install sentence-transformers
+pip install timm openai-clip huggingface-hub
+pip install opencv-python pillow
+pip install scikit-learn scipy
+pip install nltk spacy gensim
+pip install imageio scikit-image albumentations
+pip install wandb tqdm pyyaml
+pip install rich
