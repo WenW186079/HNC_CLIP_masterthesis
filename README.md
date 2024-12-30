@@ -3,7 +3,7 @@
 ## Set an environment
 ```
 python -m venv the_env &&
-source the_env/bin/activate
+source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/mm/the_env/bin/activate
 ```
 
 ## Install the packages
