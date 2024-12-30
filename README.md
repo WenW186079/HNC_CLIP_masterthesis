@@ -16,3 +16,12 @@ bash install.sh
 ```
 git clone https://huggingface.co/datasets/patilli/HNC
 ```
+
+## Download GQA dataset
+```
+mkdir gqa_dataset
+cd gqa_dataset
+
+wget https://nlp.stanford.edu/data/gqa/images.zip
+unzip images.zip -d ./images
+```
