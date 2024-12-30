@@ -2,7 +2,7 @@
 
 ## Set an environment
 ```
-python -m venv the_env &&
+python -m venv the_env
 source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/mm/the_env/bin/activate
 ```
 
