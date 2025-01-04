@@ -9,7 +9,7 @@ source /mount/studenten/team-lab-cl/data2024/w/data/negcl_env/bin/activate
 ## Install the packages
 - To install the required dependencies in your environment run: 
 ```
-bash install.sh
+pip install -r requirements.txt
 ```
 
 ## Download HNC dataset
