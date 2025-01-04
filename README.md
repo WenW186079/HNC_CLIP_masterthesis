@@ -2,8 +2,8 @@
 
 ## Set an environment
 ```
-python -m venv the_env
-source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/mm/the_env/bin/activate
+python3.10 -m venv negcl_env
+source /mount/studenten/team-lab-cl/data2024/w/data/negcl_env/bin/activate
 ```
 
 ## Install the packages
