@@ -1,4 +1,3 @@
-
 import os
 import json
 import logging
@@ -21,19 +20,18 @@ json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clea
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
 
 # Load JSON file
-print('start ---')
 logger.info("Loading annotations JSON file...")
 with open(json_file_path, 'r') as f:
     annotations = json.load(f)
 logger.info(f"Loaded {len(annotations)} annotations.")
 
-# Custom Dataset for CLIP
+
 class GQACLIPDataset(Dataset):
     def __init__(self, annotations, image_folder, transform=None):
         self.annotations = annotations
         self.image_folder = image_folder
         self.transform = transform
-        self.data_pairs = []
+        self.data_pairs = [] # Stores (image_path, positive_caption, negative_caption)
 
         # Create (image_path, caption) pairs
         logger.info("Creating image-caption pairs...")
@@ -46,18 +44,16 @@ class GQACLIPDataset(Dataset):
             image_path = os.path.join(self.image_folder, image_filename)
 
             if os.path.exists(image_path):
-                # Extract "captions" dictionary
                 captions_dict = data.get("captions", {})
-                if not captions_dict:
-                    logger.warning(f"No captions found for image ID {img_id}. Skipping...")
-                    continue
+                positive_captions = [cap['caption'] for cap in captions_dict.values() if cap['label'] == 1]
+                negative_captions = [cap['caption'] for cap in captions_dict.values() if cap['label'] == 0]
 
-                # Iterate over caption entries (e.g., "48", "49", ...)
-                for caption_id, caption_data in captions_dict.items():
-                    caption = caption_data.get('caption')  # Get caption text
-                    if caption:
-                        self.data_pairs.append((image_path, caption))
-                        logger.debug(f"Added pair: ({image_path}, {caption})")
+                if positive_captions and negative_captions:
+                    for pos_caption in positive_captions:
+                        for neg_caption in negative_captions:
+                            # Pair each positive caption with a negative caption
+                            self.data_pairs.append((image_path, pos_caption, neg_caption))
+                            logger.debug(f"Added pair: ({image_path}, {pos_caption}, {neg_caption})")
             else:
                 missing_images_count += 1
                 logger.warning(f"Missing image: {image_path}")
@@ -68,13 +64,13 @@ class GQACLIPDataset(Dataset):
         return len(self.data_pairs)
 
     def __getitem__(self, idx):
-        image_path, caption = self.data_pairs[idx]
+        image_path, pos_caption, neg_caption = self.data_pairs[idx] 
         image = Image.open(image_path).convert("RGB")
 
         if self.transform:
             image = self.transform(image)
 
-        return image, caption
+        return image, pos_caption, neg_caption  
 
 # Image transformations for CLIP
 clip_transform = transforms.Compose([
@@ -90,11 +86,13 @@ logger.info(f"Dataset size: {len(dataset)}")
 dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 logger.info("DataLoader initialized.")
 
-# Example: Displaying some data
-for idx, (images, captions) in enumerate(dataloader):
-    logger.info(f"\nBatch {idx + 1} loaded.")
-    logger.info(f"  Image batch shape: {images.shape}")
-    logger.info(f"  Captions (first 2): {captions[:2]}")
-    logger.info("  ---")
-    break  # To only show the first batch
-
+# Display the first 5 (image, positive caption, negative caption) pairs
+for idx, (images, pos_captions, neg_captions) in enumerate(dataloader):
+    print(f"\n--- Batch {idx + 1} ---")
+    for i in range(5):  # Print the first 5 pairs
+        print(f"Pair {i+1}:")
+        print(f"  Image shape: {images[i].shape}")  # Shape of the image tensor
+        print(f"  Positive Caption: {pos_captions[i]}")
+        print(f"  Negative Caption: {neg_captions[i]}")
+        print("-" * 50)
+    break  
