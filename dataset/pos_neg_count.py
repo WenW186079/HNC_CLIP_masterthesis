@@ -1,6 +1,6 @@
 import json
 
-json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
+json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json'
 
 with open(json_file_path, 'r') as f:
     annotations = json.load(f)
@@ -21,6 +21,13 @@ print(f"Total Positive Samples: {positive_count}")
 print(f"Total Negative Samples: {negative_count}")
 
 '''
+=== Result ===
+
+train:
+Total Positive Samples: 8208196
+Total Negative Samples: 8208196
+
+val:
 Total Positive Samples: 1157416
 Total Negative Samples: 1157416
 '''
