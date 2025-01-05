@@ -1,6 +1,12 @@
 annotated-types==0.7.0
+certifi==2024.12.14
+charset-normalizer==3.4.1
+clip @ git+https://github.com/openai/CLIP.git@dcba3cb2e2827b402d2701e7e1c7d9fed8a20ef1
 filelock==3.16.1
 fsspec==2024.12.0
+ftfy==6.3.1
+huggingface-hub==0.27.0
+idna==3.10
 inflect==6.0.2
 Jinja2==3.1.5
 MarkupSafe==3.0.2
@@ -19,11 +25,21 @@ nvidia-cusparse-cu12==12.3.1.170
 nvidia-nccl-cu12==2.21.5
 nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
+packaging==24.2
 pillow==11.1.0
 pydantic==2.10.4
 pydantic_core==2.27.2
+PyYAML==6.0.2
+regex==2024.11.6
+requests==2.32.3
+safetensors==0.5.0
 sympy==1.13.1
+timm==1.0.12
+tokenizers==0.21.0
 torch==2.5.1
 torchvision==0.20.1
+tqdm==4.67.1
 triton==3.1.0
 typing_extensions==4.12.2
+urllib3==2.3.0
+wcwidth==0.2.13
