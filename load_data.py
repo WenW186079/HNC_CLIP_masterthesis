@@ -16,7 +16,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 class HNCCLIPDataset(Dataset):
-    def __init__(self, annotations, image_folder, transform=None, num_random_negatives=2):
+    def __init__(self, annotations, image_folder, transform=None, num_random_negatives=5):
         self.annotations = annotations
         self.image_folder = image_folder
         self.transform = transform
@@ -72,7 +72,7 @@ class HNCCLIPDataset(Dataset):
                             self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
                             self.hnc_count += 1
 
-                        # Add N random negatives
+                        # Add N times random negatives
                         for _ in range(self.num_random_negatives):
                             while True:
                                 random_image_path, random_caption = random.choice(all_positive_captions)
@@ -100,7 +100,7 @@ class HNCCLIPDataset(Dataset):
 
         return image, pos_caption, neg_caption, source, image_path 
 
-def load_data(json_file_path, image_folder_path, batch_size=32, num_random_negatives=2, shuffle=True):
+def load_data(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5, shuffle=True):
     # Load annotations
     logger.info("Loading annotations JSON file...")
     with open(json_file_path, 'r') as f:
@@ -126,7 +126,6 @@ def load_data(json_file_path, image_folder_path, batch_size=32, num_random_negat
 # Paths
 json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-
 
 # Create DataLoader
 data_loader = load_data(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5)
