@@ -25,3 +25,7 @@ cd gqa_dataset
 wget https://nlp.stanford.edu/data/gqa/images.zip
 unzip images.zip -d ./images
 ```
+## Download CLIP model using git
+```
+pip install git+https://github.com/openai/CLIP.git
+```
