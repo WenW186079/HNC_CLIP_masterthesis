@@ -4,8 +4,8 @@ def display_top_n_samples(json_file_path, n=5):
     try:
         
         with open(json_file_path, 'r') as f:
-            data = json.load(f)  # Load entire JSON into memory
-            keys = list(data.keys())  # Get the image file names (keys)
+            data = json.load(f)  
+            keys = list(data.keys())  
             print(f"\nTotal entries in JSON: {len(keys)}")
             print(f"\nShowing the first {n} samples:\n")
             
@@ -13,7 +13,7 @@ def display_top_n_samples(json_file_path, n=5):
             for i in range(min(n, len(keys))):
                 image_name = keys[i]
                 print(f"Sample {i+1}: Image File: {image_name}")
-                print(json.dumps(data[image_name], indent=4))  # Pretty print the details
+                print(json.dumps(data[image_name], indent=4))  
                 print("\n" + "-"*80 + "\n")
     
     except json.JSONDecodeError as e:
