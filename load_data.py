@@ -6,9 +6,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import random
 
-
 # logger 
-logger = logging.getLogger("GQA_CLIP_Logger")
+logger = logging.getLogger("HNC_CLIP_Logger")
 logger.setLevel(logging.INFO)  
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
@@ -16,23 +15,16 @@ formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s', datefm
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-# Paths
-json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
-image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-
-# Load JSON file
-logger.info("Loading annotations JSON file...")
-with open(json_file_path, 'r') as f:
-    annotations = json.load(f)
-logger.info(f"Loaded {len(annotations)} annotations.")
-
-class GQACLIPDataset(Dataset):
+class HNCCLIPDataset(Dataset):
     def __init__(self, annotations, image_folder, transform=None, num_random_negatives=1):
         self.annotations = annotations
         self.image_folder = image_folder
         self.transform = transform
         self.num_random_negatives = num_random_negatives
         self.data_pairs = []  # Store (image, positive_caption, negative_caption, source)
+
+        self.hnc_count = 0
+        self.random_count = 0
 
         logger.info("Creating image-caption pairs...")
         missing_images_count = 0
@@ -78,17 +70,23 @@ class GQACLIPDataset(Dataset):
                         else:
                             pos_caption = pos_caption_map[cpt_p_id]
                             self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
+                            self.hnc_count += 1
 
-                        # Add random negatives
+                        # Add N random negatives
                         for _ in range(self.num_random_negatives):
-                            random_image_path, random_caption = random.choice(all_positive_captions)
-                            if random_image_path != image_path:  
-                                self.data_pairs.append((image_path, pos_caption, random_caption, "random"))
+                            while True:
+                                random_image_path, random_caption = random.choice(all_positive_captions)
+                                if random_image_path != image_path:  
+                                    break 
+                            self.data_pairs.append((image_path, pos_caption, random_caption, "random"))
+                            self.random_count += 1   
             else:
                 missing_images_count += 1
                 logger.warning(f"Missing image: {image_path}")
 
         logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
+        logger.info(f"Total HNC pairs: {self.hnc_count}")
+        logger.info(f"Total Random pairs: {self.random_count}")
 
     def __len__(self):
         return len(self.data_pairs)
@@ -100,48 +98,59 @@ class GQACLIPDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, pos_caption, neg_caption, source
+        return image, pos_caption, neg_caption, source, image_path 
+
+def dataloader(json_file_path, image_folder_path, batch_size=32, num_random_negatives=1, shuffle=True):
+    # Load annotations
+    logger.info("Loading annotations JSON file...")
+    with open(json_file_path, 'r') as f:
+        annotations = json.load(f)
+    logger.info(f"Loaded {len(annotations)} annotations.")
+
+    # Image transformations
+    clip_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
+    ])
+
+    # Create dataset
+    dataset = HNCCLIPDataset(annotations, image_folder_path, transform=clip_transform, num_random_negatives=num_random_negatives)
+    logger.info(f"Dataset size: {len(dataset)}")
+
+    # Create dataloader
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    logger.info("DataLoader initialized.")
+    return dataloader
+
+# Paths
+json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
+image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
 
 
-# Image transformations
-clip_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
-])
+# Create DataLoader
+dataloader = dataloader(json_file_path, image_folder_path, batch_size=32, num_random_negatives=2)
 
-# Dataset and DataLoader
-dataset = GQACLIPDataset(annotations, image_folder_path, transform=clip_transform)
-logger.info(f"Dataset size: {len(dataset)}")
-
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-logger.info("DataLoader initialized.")
-
-# Display pairs
-for idx, (images, pos_captions, neg_captions, sources) in enumerate(dataloader):
-    print(f"\n--- Batch {idx + 1} ---")
-    for i in range(5):
+# Display top 5 pairs and random 5 pairs
+for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enumerate(dataloader):
+    print(f"\nDisplay TOP 5 pairs: \n--- Batch {batch_idx + 1} ---")
+    for i in range(min(5, len(image_paths))):  
         print(f"Pair {i + 1}:")
-        print(f"  Image Path: {dataset.data_pairs[i][0]}")
+        print(f"  Image Path: {image_paths[i]}")
         print(f"  Positive Caption: {pos_captions[i]}")
         print(f"  Negative Caption: {neg_captions[i]}")
-        print(f"  Source of Negative: {sources[i]}")  
+        print(f"  Source of Negative: {sources[i]}")
         print("-" * 50)
-    break
 
-
-# Display random 5 pairs from each batch
-for idx, (images, pos_captions, neg_captions, sources) in enumerate(dataloader):
-    print(f"\n--- Batch {idx + 1} ---")
-
-    batch_size = len(pos_captions)
-    random_indices = random.sample(range(batch_size), min(5, batch_size))
+    print(f"\nDisplay random 5 pairs from each batch: \n--- Batch {batch_idx + 1} ---")
+    random_indices = random.sample(range(len(image_paths)), min(5, len(image_paths)))
     
     for i, rand_idx in enumerate(random_indices):
         print(f"Pair {i + 1}:")
-        print(f"  Image Path: {dataset.data_pairs[rand_idx][0]}")
+        print(f"  Image Path: {image_paths[rand_idx]}")
         print(f"  Positive Caption: {pos_captions[rand_idx]}")
         print(f"  Negative Caption: {neg_captions[rand_idx]}")
-        print(f"  Source of Negative: {sources[rand_idx]}")  
+        print(f"  Source of Negative: {sources[rand_idx]}")
         print("-" * 50)
-    break
+
+    break  
