@@ -100,7 +100,7 @@ class HNCCLIPDataset(Dataset):
 
         return image, pos_caption, neg_caption, source, image_path 
 
-def load_data(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5, shuffle=True):
+def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5, shuffle=True):
     # Load annotations
     logger.info("Loading annotations JSON file...")
     with open(json_file_path, 'r') as f:
@@ -120,15 +120,15 @@ def load_data(json_file_path, image_folder_path, batch_size=32, num_random_negat
 
     # Create dataloader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    logger.info("load_data initialized.")
+    logger.info("load_data_pairs initialized.")
     return dataloader
-
+'''
 # Paths
 json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
 
 # Create DataLoader
-data_loader = load_data(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5)
+data_loader = load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5)
 
 # Display top 5 pairs and random 5 pairs
 for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enumerate(data_loader):
@@ -153,3 +153,4 @@ for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enu
         print("-" * 50)
 
     break  
+'''
