@@ -122,35 +122,3 @@ def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     logger.info("load_data_pairs initialized.")
     return dataloader
-'''
-# Paths
-json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
-image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-
-# Create DataLoader
-data_loader = load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5)
-
-# Display top 5 pairs and random 5 pairs
-for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enumerate(data_loader):
-    print(f"\nDisplay TOP 5 pairs: \n--- Batch {batch_idx + 1} ---")
-    for i in range(min(5, len(image_paths))):  
-        print(f"Pair {i + 1}:")
-        print(f"  Image Path: {image_paths[i]}")
-        print(f"  Positive Caption: {pos_captions[i]}")
-        print(f"  Negative Caption: {neg_captions[i]}")
-        print(f"  Source of Negative: {sources[i]}")
-        print("-" * 50)
-
-    print(f"\nDisplay random 5 pairs from each batch: \n--- Batch {batch_idx + 1} ---")
-    random_indices = random.sample(range(len(image_paths)), min(5, len(image_paths)))
-    
-    for i, rand_idx in enumerate(random_indices):
-        print(f"Pair {i + 1}:")
-        print(f"  Image Path: {image_paths[rand_idx]}")
-        print(f"  Positive Caption: {pos_captions[rand_idx]}")
-        print(f"  Negative Caption: {neg_captions[rand_idx]}")
-        print(f"  Source of Negative: {sources[rand_idx]}")
-        print("-" * 50)
-
-    break  
-'''
