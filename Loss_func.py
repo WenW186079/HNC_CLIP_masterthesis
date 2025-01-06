@@ -12,19 +12,18 @@ class HNC_Loss(nn.Module):
         self.fisher_matrix = fisher_matrix  # Precomputed Fisher Information
         self.clip_params = clip_params  # Original CLIP parameters (for regularization)
         
-    def forward(self, v_i, u_i_pos, u_i_neg, params, source):
+    def forward(self, v_i, u_i_pos, u_i_hnc_neg, u_i_batch_neg):
+        """
+        Compute loss using in-batch negatives and weighted HNC negatives.
+        """
         s_ii = cosine_similarity(v_i, u_i_pos) / self.tau  # Positive pair
-        s_i_neg = cosine_similarity(v_i.unsqueeze(1), u_i_neg).mean(dim=1) / self.tau  # Negative pairs
+        s_i_hnc = cosine_similarity(v_i, u_i_hnc_neg) / self.tau  # HNC negative
+        s_i_batch_neg = cosine_similarity(v_i.unsqueeze(1), u_i_batch_neg).mean(dim=1) / self.tau  # In-batch negatives
 
-        # Convert source into weight tensors (alpha for "hnc", 1.0 for "random")
-        source_weights = torch.tensor([self.alpha if s == "hnc" else 1.0 for s in source], device=v_i.device)
-
-        # Apply weights to negative pairs
-        weighted_neg = torch.exp(s_i_neg) * source_weights
 
         # Image-to-text loss component
         loss_img_to_text = -torch.log(
-            torch.exp(s_ii) / (torch.exp(s_ii) + weighted_neg.sum(dim=0))
+            torch.exp(s_ii) / (torch.exp(s_ii) + self.alpha * torch.exp(s_i_hnc) + torch.exp(s_i_batch_neg).sum(dim=0))
         ).mean()
 
         # Text-to-image loss component
