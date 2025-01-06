@@ -140,7 +140,7 @@ def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random
     ])
 
     # Create dataset
-    dataset = HNCCLIPDataset(annotations, image_folder_path, transform=clip_transform, num_random_negatives=num_random_negatives)
+    dataset = HNCCLIPDataset(annotations, image_folder_path, transform=clip_transform)
     logger.info(f"Dataset size: {len(dataset)}")
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=fine_tune_collate_fn)
