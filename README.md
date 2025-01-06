@@ -30,7 +30,14 @@ unzip images.zip -d ./images
 pip install git+https://github.com/openai/CLIP.git
 ```
 
-# Fine-tuning
+## Fine-tuning
+### Set cache path
+```
+export TORCH_EXTENSIONS_DIR=/mount/studenten/team-lab-cl/data2024/w/data/torch_extensions/
+echo $TORCH_EXTENSIONS_DIR
+
+```
+### Use deepspeed run the code
 ```
 deepspeed --num_gpus=8 main.py --deepspeed_config deepspeed_config.json
 ```
