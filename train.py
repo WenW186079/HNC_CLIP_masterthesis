@@ -27,37 +27,31 @@ def train_clip_with_hnc_loss(model, train_loader, val_loader, criterion, optimiz
         logger.info(f"Starting epoch {epoch + 1}/{epochs}...")
 
         # Training
-        for batch_idx, (images, tokenized_captions, labels, sources) in enumerate(train_loader):
-            images, tokenized_captions, labels = (
-                images.to(device), tokenized_captions.to(device), labels.to(device)
-            )
+        for batch_idx, (images, tokenized_pos, tokenized_hnc_neg, in_batch_neg) in enumerate(train_loader):
+            images = images.to(device)
+            tokenized_pos = tokenized_pos.to(device)
+            tokenized_hnc_neg = tokenized_hnc_neg.to(device)
+            in_batch_neg = [neg.to(device) for neg in in_batch_neg]
 
             v_i = model.encode_image(images)
-            u_i = model.encode_text(tokenized_captions)
+            u_i_pos = model.encode_text(tokenized_pos)
+            u_i_hnc_neg = model.encode_text(tokenized_hnc_neg)
 
-            # Separate positive and negative samples
-            pos_indices = torch.where(torch.tensor(sources) == "pos")[0]
-            hnc_indices = torch.where(torch.tensor(sources) == "hnc")[0]
-            random_indices = torch.where(torch.tensor(sources) == "random")[0]
+            u_i_batch_neg = torch.cat([model.encode_text(neg) for neg in in_batch_neg])
 
-            v_i_pos = v_i[pos_indices]
-            u_i_pos = u_i[pos_indices]
-
-            v_i_neg_hnc = v_i[hnc_indices]
-            u_i_neg_hnc = u_i[hnc_indices]
-
-            v_i_neg_rand = v_i[random_indices]
-            u_i_neg_rand = u_i[random_indices]
-
-            # Compute loss
-            loss = criterion(v_i_pos, u_i_pos, u_i_neg_hnc, u_i_neg_rand, {name: param for name, param in model.named_parameters()})
+            loss = criterion(v_i, u_i_pos, u_i_hnc_neg, u_i_batch_neg)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-    
+
             total_loss += loss.item()
             if (batch_idx + 1) % 10 == 0:
                 print(f"Batch [{batch_idx + 1}/{len(train_loader)}] Loss: {loss.item():.4f}")
+
+        avg_loss = total_loss / len(train_loader)
+        logger.info(f"Epoch [{epoch + 1}/{epochs}] Average Training Loss: {avg_loss:.4f}")
+
+
 
         avg_loss = total_loss / len(train_loader)
         logger.info(f"Epoch [{epoch + 1}/{epochs}] Average Training Loss: {avg_loss:.4f}")
@@ -66,32 +60,21 @@ def train_clip_with_hnc_loss(model, train_loader, val_loader, criterion, optimiz
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for images, tokenized_captions, labels, sources in val_loader:
-                images, tokenized_captions, labels = (
-                    images.to(device), tokenized_captions.to(device), labels.to(device)
-                )
+            for images, tokenized_pos, tokenized_hnc_neg, in_batch_neg in val_loader:
+                # Move data to device
+                images = images.to(device)
+                tokenized_pos = tokenized_pos.to(device)
+                tokenized_hnc_neg = tokenized_hnc_neg.to(device)
+                in_batch_neg = [neg.to(device) for neg in in_batch_neg]
 
+                # Get image and text embeddings
                 v_i = model.encode_image(images)  # Image embeddings
-                u_i = model.encode_text(tokenized_captions)  # Text embeddings
+                u_i_pos = model.encode_text(tokenized_pos)  # Positive text embeddings
+                u_i_hnc_neg = model.encode_text(tokenized_hnc_neg)  # HNC negative embeddings
+                u_i_batch_neg = torch.cat([model.encode_text(neg) for neg in in_batch_neg])  # In-batch negatives
 
-                # Separate positive and negative samples based on `sources`
-                pos_indices = [i for i, s in enumerate(sources) if s == "pos"]
-                hnc_indices = [i for i, s in enumerate(sources) if s == "hnc"]
-                random_indices = [i for i, s in enumerate(sources) if s == "random"]
-
-                v_i_pos = v_i[pos_indices]
-                u_i_pos = u_i[pos_indices]
-
-                v_i_neg_hnc = v_i[hnc_indices]
-                u_i_neg_hnc = u_i[hnc_indices]
-
-                v_i_neg_rand = v_i[random_indices]
-                u_i_neg_rand = u_i[random_indices]
-
-                # Calculate loss
-                loss = criterion(
-                    v_i_pos, u_i_pos, u_i_neg_hnc, u_i_neg_rand, {name: param for name, param in model.named_parameters()}
-                )
+                # Calculate validation loss
+                loss = criterion(v_i, u_i_pos, u_i_hnc_neg, u_i_batch_neg)
                 val_loss += loss.item()
 
             avg_val_loss = val_loss / len(val_loader)
