@@ -39,5 +39,7 @@ echo $TORCH_EXTENSIONS_DIR
 ```
 ### Use deepspeed run the code
 ```
-deepspeed --num_gpus=8 main.py 
+deepspeed --num_gpus=8 main.py
+# or
+deepspeed --include="localhost:0,2,3,4,5,6,7,8" main.py
 ```
