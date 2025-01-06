@@ -1,13 +1,13 @@
 import os
 import json
 import random
+import logging
 from PIL import Image  
 import torch
 from torch.utils.data import Dataset, DataLoader  
 from torchvision import transforms  
 from torch.optim import AdamW
-import logging
-import open_clip 
+import clip 
 
 from load_data import HNCCLIPDataset, load_data_pairs 
 from Loss_func import HNC_Loss
@@ -16,11 +16,13 @@ from train import train_clip_with_hnc_loss
 
 
 # Paths
-train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json'
-val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
+train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
+val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json'
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-batch_size = 32
-num_random_negatives = 5
+batch_size = 8
+num_random_negatives = 1
+
+
 
 train_loader = load_data_pairs(
     json_file_path=train_json_file_path, 
@@ -38,6 +40,14 @@ val_loader = load_data_pairs(
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+for batch_idx, (images, pos_texts, neg_texts, sources) in enumerate(train_loader):
+    print(f"Images shape: {images.shape}")
+    print(f"Tokenized Positive Texts shape: {pos_texts.shape}")
+    print(f"Tokenized Negative Texts shape: {neg_texts.shape}")
+    print(f"Sources: {sources}")
+    break 
+
+'''
 # Display top 5 pairs and random 5 pairs
 for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enumerate(train_loader):
     print(f"\nDisplay TOP 5 pairs: \n--- Batch {batch_idx + 1} ---")
@@ -61,19 +71,23 @@ for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enu
         print("-" * 50)
 
     break  
+'''
 
-# Load CLIP model
-model, _ = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
-model.to(device)
+# Load CLIP model: "ViT-B/16","ViT-B/32","ViT-L/14","ViT-L/14@336px"
+model, preprocess = clip.load("ViT-B/16", device=device)
 
-# Original CLIP parameters
+# 冻结文本编码器，只允许视觉编码器训练
+for name, param in model.named_parameters():
+    if "transformer" in name or "token_embedding" in name or "text_projection" in name:
+        param.requires_grad = False
+
 clip_params = {name: param.clone().detach() for name, param in model.named_parameters()}
-# Precomputed Fisher matrix
 fisher_matrix = {name: torch.ones_like(param) * 0.01 for name, param in model.named_parameters()}
 
 # Define Loss and Optimizer
 criterion = HNC_Loss(fisher_matrix, clip_params, alpha=0.5, tau=0.07, lambda_=0.1)
-optimizer = AdamW(model.parameters(), lr=5e-6)
+optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=5e-6)
 
 train_clip_with_hnc_loss(model, train_loader, val_loader, criterion, optimizer, device, epochs=1)
 
+push_vision_encoder_to_hub(model, "HNC_CLIP_ViT", "WenWW")
