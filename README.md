@@ -29,3 +29,8 @@ unzip images.zip -d ./images
 ```
 pip install git+https://github.com/openai/CLIP.git
 ```
+
+# Fine-tuning
+```
+deepspeed --num_gpus=8 main.py --deepspeed_config deepspeed_config.json
+```
