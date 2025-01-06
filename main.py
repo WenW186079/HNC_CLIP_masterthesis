@@ -19,8 +19,7 @@ from train import train_clip_with_hnc_loss
 train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
 val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json'
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-batch_size = 8
-num_random_negatives = 1
+batch_size = 3
 
 
 
@@ -28,24 +27,16 @@ train_loader = load_data_pairs(
     json_file_path=train_json_file_path, 
     image_folder_path=image_folder_path, 
     batch_size=batch_size, 
-    num_random_negatives=num_random_negatives
     )
 
 val_loader = load_data_pairs(
     json_file_path=val_json_file_path, 
     image_folder_path=image_folder_path, 
     batch_size=batch_size, 
-    num_random_negatives=num_random_negatives, 
     shuffle=False)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-for batch_idx, (images, pos_texts, neg_texts, sources) in enumerate(train_loader):
-    print(f"Images shape: {images.shape}")
-    print(f"Tokenized Positive Texts shape: {pos_texts.shape}")
-    print(f"Tokenized Negative Texts shape: {neg_texts.shape}")
-    print(f"Sources: {sources}")
-    break 
 
 '''
 # Display top 5 pairs and random 5 pairs
