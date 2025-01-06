@@ -90,7 +90,7 @@ def fine_tune_collate_fn(batch):
     """
     images, pos_captions, hnc_neg_captions = [], [], []
 
-    for image, pos_caption, neg_caption in batch:
+    for image, pos_caption, neg_caption, *_ in batch:
         images.append(image)
         pos_captions.append(pos_caption)
         hnc_neg_captions.append(neg_caption)
