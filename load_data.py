@@ -2,9 +2,11 @@ import os
 import json
 import logging
 from PIL import Image
+import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import random
+import clip
 
 # logger 
 logger = logging.getLogger("HNC_CLIP_Logger")
@@ -17,6 +19,15 @@ logger.addHandler(console_handler)
 
 class HNCCLIPDataset(Dataset):
     def __init__(self, annotations, image_folder, transform=None, num_random_negatives=5):
+        """
+        Initializes the dataset by creating image-caption pairs.
+
+        Args:
+        - annotations: Dictionary containing annotations with image IDs and captions.
+        - image_folder: Path to the folder containing the images.
+        - transform: Transformations to be applied to the images.
+        - num_random_negatives: Number of random negative captions to include for each positive caption.
+        """
         self.annotations = annotations
         self.image_folder = image_folder
         self.transform = transform
@@ -100,8 +111,41 @@ class HNCCLIPDataset(Dataset):
 
         return image, pos_caption, neg_caption, source, image_path 
 
+def fine_tune_collate_fn(batch):
+    """
+    Custom collate function to ensure (image, positive_caption) and (image, negative_caption) pairs
+    are in the same batch and source is preserved.
+    """
+    images = []  # List of images
+    captions = []  # List of tokenized captions
+    labels = []  # Positive (1) or negative (0)
+    sources = []  # Track the source ("pos", "hnc", "random")
+
+    for image, pos_caption, neg_caption, source, image_path in batch:
+        # Add positive pair (image, pos_caption)
+        images.append(image)
+        captions.append(pos_caption)
+        labels.append(1)  # Positive sample
+        sources.append("pos")  # Positive source
+
+        # Add negative pair (image, neg_caption)
+        images.append(image)
+        captions.append(neg_caption)
+        labels.append(0)  # Negative sample
+        sources.append(source)  # HNC or random source
+
+    # Tokenize captions
+    tokenized_captions = clip.tokenize(captions)
+
+    return torch.stack(images), tokenized_captions, torch.tensor(labels), sources
+
+
+
 def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5, shuffle=True):
-    # Load annotations
+    """
+    Creates a DataLoader for fine-tuning CLIP.
+
+    """
     logger.info("Loading annotations JSON file...")
     with open(json_file_path, 'r') as f:
         annotations = json.load(f)
@@ -118,7 +162,6 @@ def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random
     dataset = HNCCLIPDataset(annotations, image_folder_path, transform=clip_transform, num_random_negatives=num_random_negatives)
     logger.info(f"Dataset size: {len(dataset)}")
 
-    # Create dataloader
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    logger.info("load_data_pairs initialized.")
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=fine_tune_collate_fn)
+    logger.info("DataLoader for fine-tuning initialized.")
     return dataloader
