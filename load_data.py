@@ -18,37 +18,19 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 class HNCCLIPDataset(Dataset):
-    def __init__(self, annotations, image_folder, transform=None, num_random_negatives=5):
+    def __init__(self, annotations, image_folder, transform=None):
         """
-        Initializes the dataset by creating image-caption pairs.
-
-        Args:
-        - annotations: Dictionary containing annotations with image IDs and captions.
-        - image_folder: Path to the folder containing the images.
-        - transform: Transformations to be applied to the images.
-        - num_random_negatives: Number of random negative captions to include for each positive caption.
+        Initializes the dataset by creating image-caption pairs (only HNC negatives).
         """
         self.annotations = annotations
         self.image_folder = image_folder
         self.transform = transform
-        self.num_random_negatives = num_random_negatives
-        self.data_pairs = []  # Store (image, positive_caption, negative_caption, source)
+        self.data_pairs = [] # Store (image, positive_caption, negative_caption)
 
         self.hnc_count = 0
-        self.random_count = 0
 
         logger.info("Creating image-caption pairs...")
         missing_images_count = 0
-
-        all_positive_captions = []  
-        for img_id, data in annotations.items():
-            image_filename = f"{img_id}.jpg"
-            image_path = os.path.join(self.image_folder, image_filename)
-            if os.path.exists(image_path):
-                captions_dict = data.get("captions", {})
-                for cap in captions_dict.values():
-                    if cap["label"] == 1: 
-                        all_positive_captions.append((image_path, cap["caption"]))
 
         for img_id, data in annotations.items():
             image_filename = f"{img_id}.jpg"
@@ -83,21 +65,12 @@ class HNCCLIPDataset(Dataset):
                             self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
                             self.hnc_count += 1
 
-                        # Add N times random negatives
-                        for _ in range(self.num_random_negatives):
-                            while True:
-                                random_image_path, random_caption = random.choice(all_positive_captions)
-                                if random_image_path != image_path:  
-                                    break 
-                            self.data_pairs.append((image_path, pos_caption, random_caption, "random"))
-                            self.random_count += 1   
             else:
                 missing_images_count += 1
                 logger.warning(f"Missing image: {image_path}")
 
         logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
         logger.info(f"Total HNC pairs: {self.hnc_count}")
-        logger.info(f"Total Random pairs: {self.random_count}")
 
     def __len__(self):
         return len(self.data_pairs)
@@ -109,36 +82,44 @@ class HNCCLIPDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, pos_caption, neg_caption, source, image_path 
+        return image, pos_caption, neg_caption, image_path 
 
 def fine_tune_collate_fn(batch):
     """
-    Custom collate function to ensure (image, positive_caption) and (image, negative_caption) pairs
-    are in the same batch and source is preserved.
+    Custom collate function to create in-batch negatives and log the pair count.
     """
-    images = []  # List of images
-    captions = []  # List of tokenized captions
-    labels = []  # Positive (1) or negative (0)
-    sources = []  # Track the source ("pos", "hnc", "random")
+    images, pos_captions, hnc_neg_captions = [], [], []
 
-    for image, pos_caption, neg_caption, source, image_path in batch:
-        # Add positive pair (image, pos_caption)
+    for image, pos_caption, neg_caption in batch:
         images.append(image)
-        captions.append(pos_caption)
-        labels.append(1)  # Positive sample
-        sources.append("pos")  # Positive source
+        pos_captions.append(pos_caption)
+        hnc_neg_captions.append(neg_caption)
 
-        # Add negative pair (image, neg_caption)
-        images.append(image)
-        captions.append(neg_caption)
-        labels.append(0)  # Negative sample
-        sources.append(source)  # HNC or random source
+    tokenized_pos_captions = clip.tokenize(pos_captions)
+    tokenized_hnc_neg_captions = clip.tokenize(hnc_neg_captions)
 
-    # Tokenize captions
-    tokenized_captions = clip.tokenize(captions)
+    # In-batch negatives: positive captions from other images
+    in_batch_neg_captions = []
+    total_pairs_per_sample = 0
 
-    return torch.stack(images), tokenized_captions, torch.tensor(labels), sources
+    for i in range(len(pos_captions)):
+        # Add all positive captions from the rest of the batch as negatives
+        neg_captions_for_sample = [pos_captions[j] for j in range(len(pos_captions)) if j != i]
+        in_batch_neg_captions.append(clip.tokenize(neg_captions_for_sample))
+        
+        num_pairs_for_sample = 1 + len(neg_captions_for_sample)  # 1 HNC negative + in-batch negatives
+        total_pairs_per_sample += num_pairs_for_sample
+        print(f"Sample {i + 1}: HNC negative + {len(neg_captions_for_sample)} in-batch negatives (Total pairs: {num_pairs_for_sample})")
 
+    total_pairs = total_pairs_per_sample * len(batch)
+    print(f"Total pairs in batch: {total_pairs}")
+
+    return (
+        torch.stack(images),
+        tokenized_pos_captions,
+        tokenized_hnc_neg_captions,
+        in_batch_neg_captions
+    )
 
 
 def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5, shuffle=True):
