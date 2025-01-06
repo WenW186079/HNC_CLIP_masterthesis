@@ -86,39 +86,44 @@ class HNCCLIPDataset(Dataset):
 
 def fine_tune_collate_fn(batch):
     """
-    Custom collate function to create in-batch negatives and log the pair count.
+    Custom collate function to create in-batch negatives, ensuring negatives come from different images.
     """
-    images, pos_captions, hnc_neg_captions = [], [], []
+    images, pos_captions, hnc_neg_captions, image_paths = [], [], [], []
 
-    for image, pos_caption, neg_caption, *_ in batch:
+    for image, pos_caption, neg_caption, image_path in batch:
         images.append(image)
         pos_captions.append(pos_caption)
         hnc_neg_captions.append(neg_caption)
+        image_paths.append(image_path)
 
     tokenized_pos_captions = clip.tokenize(pos_captions)
     tokenized_hnc_neg_captions = clip.tokenize(hnc_neg_captions)
 
-    # In-batch negatives: positive captions from other images
+    # In-batch negatives: only use positive captions from different images
     in_batch_neg_captions = []
     total_pairs_per_sample = 0
 
     for i in range(len(pos_captions)):
-        # Add all positive captions from the rest of the batch as negatives
-        neg_captions_for_sample = [pos_captions[j] for j in range(len(pos_captions)) if j != i]
+        current_image_path = image_paths[i]
+
+        neg_captions_for_sample = [
+            pos_captions[j] for j in range(len(pos_captions))
+            if image_paths[j] != current_image_path 
+        ]
         in_batch_neg_captions.append(clip.tokenize(neg_captions_for_sample))
-        
+
         num_pairs_for_sample = 1 + len(neg_captions_for_sample)  # 1 HNC negative + in-batch negatives
         total_pairs_per_sample += num_pairs_for_sample
-        print(f"Sample {i + 1}: HNC negative + {len(neg_captions_for_sample)} in-batch negatives (Total pairs: {num_pairs_for_sample})")
+        #print(f"Sample {i + 1}: HNC negative + {len(neg_captions_for_sample)} in-batch negatives (Total pairs: {num_pairs_for_sample})")
 
     total_pairs = total_pairs_per_sample * len(batch)
-    print(f"Total pairs in batch: {total_pairs}")
+    #print(f"Total pairs in batch: {total_pairs}")
 
     return (
         torch.stack(images),
         tokenized_pos_captions,
         tokenized_hnc_neg_captions,
-        in_batch_neg_captions
+        in_batch_neg_captions,
     )
 
 
@@ -139,7 +144,6 @@ def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random
         transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
     ])
 
-    # Create dataset
     dataset = HNCCLIPDataset(annotations, image_folder_path, transform=clip_transform)
     logger.info(f"Dataset size: {len(dataset)}")
 
