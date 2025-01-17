@@ -8,8 +8,7 @@ from torchvision import transforms
 import random
 import clip
 
-# logger 
-logger = logging.getLogger("HNC_CLIP_Logger")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
@@ -20,16 +19,17 @@ logger.addHandler(console_handler)
 class HNCCLIPDataset(Dataset):
     def __init__(self, annotations, image_folder, transform=None):
         """
-        Initializes the dataset by creating image-caption pairs (only HNC negatives).
+        Initializes the dataset by creating (image, positive_caption, negative_caption) pairs.
         """
         self.annotations = annotations
         self.image_folder = image_folder
         self.transform = transform
-        self.data_pairs = [] # Store (image, positive_caption, negative_caption)
-
+        self.data_pairs = [] 
         self.hnc_count = 0
+        self.positive_count = 0
+        self.random_negative_count = 0
 
-        logger.info("Creating image-caption pairs...")
+        logger.info("Creating image-POS-HNC pairs...")
         missing_images_count = 0
 
         for img_id, data in annotations.items():
@@ -44,6 +44,8 @@ class HNCCLIPDataset(Dataset):
                     cap_id: cap_data["caption"]
                     for cap_id, cap_data in captions_dict.items() if cap_data["label"] == 1
                 }
+
+                self.positive_count += len(pos_caption_map)
 
                 for cap_id, cap_data in captions_dict.items():
                     if cap_data["label"] == 0: 
@@ -64,10 +66,9 @@ class HNCCLIPDataset(Dataset):
                             pos_caption = pos_caption_map[cpt_p_id]
                             self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
                             self.hnc_count += 1
-
             else:
                 missing_images_count += 1
-                logger.warning(f"Missing image: {image_path}")
+                logger.warning(f"❗️Missing image: {image_path}")
 
         logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
         logger.info(f"Total HNC pairs: {self.hnc_count}")
@@ -83,70 +84,144 @@ class HNCCLIPDataset(Dataset):
             image = self.transform(image)
 
         return image, pos_caption, neg_caption, image_path 
+    
+    def get_unique_batch(self, batch_size):
+        """
+        Ensures no repeated image_path in a batch.
+        """
+        unique_paths = set()
+        unique_batch = []
 
-def fine_tune_collate_fn(batch):
-    """
-    Custom collate function to create in-batch negatives, ensuring negatives come from different images.
-    """
-    images, pos_captions, hnc_neg_captions, image_paths = [], [], [], []
+        for data_pair in self.data_pairs:
+            image_path = data_pair[0]
+            if image_path not in unique_paths:
+                unique_paths.add(image_path)
+                unique_batch.append(data_pair)
 
-    for image, pos_caption, neg_caption, image_path in batch:
-        images.append(image)
-        pos_captions.append(pos_caption)
-        hnc_neg_captions.append(neg_caption)
-        image_paths.append(image_path)
+            if len(unique_batch) == batch_size:
+                break
 
-    tokenized_pos_captions = clip.tokenize(pos_captions)
-    tokenized_hnc_neg_captions = clip.tokenize(hnc_neg_captions)
+        if len(unique_batch) < batch_size:
+            raise ValueError(f"❗️Not enough unique image paths to form a batch of size {batch_size}")
 
-    # In-batch negatives: only use positive captions from different images
-    in_batch_neg_captions = []
-    total_pairs_per_sample = 0
-
-    for i in range(len(pos_captions)):
-        current_image_path = image_paths[i]
-
-        neg_captions_for_sample = [
-            pos_captions[j] for j in range(len(pos_captions))
-            if image_paths[j] != current_image_path 
-        ]
-        in_batch_neg_captions.append(clip.tokenize(neg_captions_for_sample))
-
-        num_pairs_for_sample = 1 + len(neg_captions_for_sample)  # 1 HNC negative + in-batch negatives
-        total_pairs_per_sample += num_pairs_for_sample
-        #print(f"Sample {i + 1}: HNC negative + {len(neg_captions_for_sample)} in-batch negatives (Total pairs: {num_pairs_for_sample})")
-
-    total_pairs = total_pairs_per_sample * len(batch)
-    #print(f"Total pairs in batch: {total_pairs}")
-
-    return (
-        torch.stack(images),
-        tokenized_pos_captions,
-        tokenized_hnc_neg_captions,
-        in_batch_neg_captions,
-    )
+        return unique_batch
+    
+    def pair_data(batch):
+        """
+        Create data pairs for training within a batch:
+        (I_i, T_i), (I_i, T_i_HNC), (I_i, T_j), (I_i, T_j_HNC).
+        """
+        paired_data = []
+        images, pos_captions, neg_captions, image_paths = batch
+        batch_size = len(images)
+        print('batch_size=',batch_size)
 
 
-def load_data_pairs(json_file_path, image_folder_path, batch_size=32, num_random_negatives=5, shuffle=True):
-    """
-    Creates a DataLoader for fine-tuning CLIP.
+        for i in range(batch_size):
+            image_tensor = images[i]
+            pos_caption = pos_captions[i]
+            neg_caption = neg_captions[i]
 
-    """
-    logger.info("Loading annotations JSON file...")
-    with open(json_file_path, 'r') as f:
-        annotations = json.load(f)
-    logger.info(f"Loaded {len(annotations)} annotations.")
+            # Add current image pairs
+            paired_data.append((image_tensor, pos_caption, "positive"))  # Positive pair
+            paired_data.append((image_tensor, neg_caption, "hnc"))       # HNC pair
 
-    # Image transformations
-    clip_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]),
-    ])
+            # Add cross-image negatives for all other images
+            for j in range(batch_size):
+                if j != i:
+                    cross_pos_caption = pos_captions[j]
+                    cross_neg_caption = neg_captions[j]
+                    paired_data.append((image_tensor, cross_pos_caption, "random_negative"))  # Cross-image positive pair
+                    paired_data.append((image_tensor, cross_neg_caption, "random_negative"))  # Cross-image HNC pair
+        
+        # Validation: Check if total pairs = 2n^2
+        expected_pairs = 2 * batch_size ** 2
+        if len(paired_data) != expected_pairs:
+            print(f"❗️Error in pair count! Expected {expected_pairs}, but got {len(paired_data)}.")
+            print(f"Batch size: {batch_size}")
+            print(f"Generated pairs: {paired_data}")
+        else:
+            print(f"✅ Pair count is correct: {len(paired_data)} pairs (batch size: {batch_size}).")
 
-    dataset = HNCCLIPDataset(annotations, image_folder_path, transform=clip_transform)
-    logger.info(f"Dataset size: {len(dataset)}")
+        return paired_data
 
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=fine_tune_collate_fn)
-    logger.info("DataLoader for fine-tuning initialized.")
-    return dataloader
+    def pair_data_tensor(batch, tokenizer):
+        
+        paired_data = []
+        images, pos_captions, neg_captions, image_paths = batch 
+        batch_size = len(images)
+        print('batch_size=',batch_size)
+
+        for i in range(batch_size):
+            image_tensor = images[i]
+            pos_caption = tokenizer(pos_captions[i], truncate=True).to(image_tensor.device)  # Tokenize positive caption
+            neg_caption = tokenizer(neg_captions[i], truncate=True).to(image_tensor.device)  # Tokenize negative caption
+
+            # Add current image pairs
+            paired_data.append((image_tensor, pos_caption, "positive"))  # Positive pair
+            paired_data.append((image_tensor, neg_caption, "hnc"))       # HNC pair
+
+            # Add cross-image negatives for all other images
+            for j in range(batch_size):
+                if j != i:
+                    cross_pos_caption = tokenizer(pos_captions[j], truncate=True).to(image_tensor.device)
+                    cross_neg_caption = tokenizer(neg_captions[j], truncate=True).to(image_tensor.device)
+                    paired_data.append((image_tensor, cross_pos_caption, "random_negative"))  # Cross-image positive pair
+                    paired_data.append((image_tensor, cross_neg_caption, "random_negative"))  # Cross-image HNC pair
+
+        # Validation: Check if total pairs = 2n^2
+        expected_pairs = 2 * batch_size ** 2
+        if len(paired_data) != expected_pairs:
+            print(f"❗️ Error in pair count! Expected {expected_pairs}, but got {len(paired_data)}.")
+            print(f"Batch size: {batch_size}")
+            print(f"Generated pairs: {paired_data}")
+        else:
+            print(f"✅ Pair count is correct: {len(paired_data)} pairs (batch size: {batch_size}).")
+
+        return paired_data
+
+# Example usage:
+train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
+val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json'
+image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
+
+# Initialize CLIP Models
+device = "cuda" if torch.cuda.is_available() else "cpu"
+clip_model, preprocess = clip.load("ViT-B/32", device=device)
+tokenizer = clip.tokenize
+
+# Load the annotations
+with open(train_json_file_path, 'r') as f:
+    train_annotations = json.load(f)
+
+# Initialize the dataset
+dataset = HNCCLIPDataset(
+    annotations=train_annotations,
+    image_folder=image_folder_path,
+    transform=preprocess, 
+)
+
+# Create a DataLoader
+batch_size = 3 
+data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+# print the first batch
+for batch in data_loader:
+    images, pos_captions, neg_captions, image_paths = batch
+    for i in range(len(images)):
+        print(f"Image Path: {image_paths[i]}")
+        print(f"Positive Caption: {pos_captions[i]}")
+        print(f"Negative Caption: {neg_captions[i]}")
+        print("-" * 50)
+    break
+
+for batch in data_loader:
+    paired_batch = HNCCLIPDataset.pair_data_tensor(batch, tokenizer)
+    # for i, (image_tensor, text_tensor, pair_type) in enumerate(paired_batch[:3]):
+    for i, (image_tensor, text_tensor, pair_type) in enumerate(paired_batch):
+        print(f"Pair {i+1}:")
+        print(f"Image Tensor Shape: {image_tensor.shape}")  
+        print(f"Text Tensor Shape: {text_tensor.shape}")    
+        print(f"Pair Type: {pair_type}")
+        print("-" * 50)
+    break
