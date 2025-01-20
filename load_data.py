@@ -106,6 +106,28 @@ class HNCCLIPDataset(Dataset):
 
         return unique_batch
     
+    def pair_data_tensor_unique(batch, tokenizer):
+        """
+        Create tensor pairs for (image, positive_caption, hard_negative_caption),
+        ensuring no duplicate images in a batch.
+        """
+        images, pos_captions, neg_captions, image_paths = batch
+        batch_size = len(images)
+        
+        print(f"Batch size: {batch_size}")
+
+        # Tokenize captions
+        pos_captions = [tokenizer(caption, truncate=True).to(images[0].device) for caption in pos_captions]
+        neg_captions = [tokenizer(caption, truncate=True).to(images[0].device) for caption in neg_captions]
+
+        # Collect unique image pairs
+        paired_data = []
+        for i in range(batch_size):
+            paired_data.append((images[i], pos_captions[i], neg_captions[i]))
+
+        return paired_data
+        
+    
     def pair_data(batch):
         """
         Create data pairs for training within a batch:
@@ -216,12 +238,12 @@ for batch in data_loader:
     break
 
 for batch in data_loader:
-    paired_batch = HNCCLIPDataset.pair_data_tensor(batch, tokenizer)
+    paired_batch = HNCCLIPDataset.pair_data_tensor_unique(batch, tokenizer)
     # for i, (image_tensor, text_tensor, pair_type) in enumerate(paired_batch[:3]):
-    for i, (image_tensor, text_tensor, pair_type) in enumerate(paired_batch):
+    for i, (image_tensor, pos_tensor, neg_caption) in enumerate(paired_batch):
         print(f"Pair {i+1}:")
         print(f"Image Tensor Shape: {image_tensor.shape}")  
-        print(f"Text Tensor Shape: {text_tensor.shape}")    
-        print(f"Pair Type: {pair_type}")
+        print(f"pos_tensor Tensor Shape: {pos_tensor.shape}")    
+        print(f"neg_caption Tensor Shape: {neg_caption.shape}")    
         print("-" * 50)
     break
