@@ -7,8 +7,7 @@ from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from transformers import CLIPModel, CLIPProcessor
 from torch.nn import functional as F
-from huggingface_hub import HfApi, HfFolder, Repository
-import deepspeed  
+from huggingface_hub import HfApi, HfFolder, Repository 
 import wandb
 
 from load_data import LoadHNCPair, UniqueImageSampler, show_batches
@@ -23,13 +22,11 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(m
 
 # Paths
 train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
-val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json'
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-config_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/config/deepspeed_config.json'
 
 # Hyperparameters
-batch_size = 3
-num_epochs = 3
+batch_size = 32
+num_epochs = 1
 learning_rate = 1e-4
 weight_decay = 1e-5
 output_dir = "./fine_tuned_clip"
@@ -74,14 +71,8 @@ logging.info("finish optimizer.")
 logging.info("start training.")
 train_clip_model(model, processor, data_loader, loss_fn, optimizer, num_epochs, device)
 
-# Save the fine-tuned model
-# output_dir = "./fine_tuned_clip"
-# model.save_pretrained(output_dir)
-# processor.save_pretrained(output_dir)
-# logging.info(f"Model saved to {output_dir}")
-
 # Push to hub
-repo_name = "HNC-clip"  # Name for the Hugging Face repository
+repo_name = "HNC-clip"  
 push_to_hub(
     model=model,
     processor=processor,
