@@ -1,21 +1,25 @@
 import os
 import json
-import random
 import logging
 from PIL import Image  
 import torch
-from torch.utils.data import Dataset, DataLoader  
-from torchvision import transforms  
+from torch.utils.data import DataLoader  
 from torch.optim import AdamW
-import clip 
+from transformers import CLIPModel, CLIPProcessor
+from torch.nn import functional as F
+from huggingface_hub import HfApi, HfFolder, Repository
 import deepspeed  
+import wandb
 
-from load_data import HNCCLIPDataset, load_data_pairs 
-from Loss_func import HNC_Loss
-from train import train_clip_with_hnc_loss, push_vision_encoder_to_hub
+from load_data import LoadHNCPair, UniqueImageSampler, show_batches
+from loss_func import safe_exp, HNC_Loss
+from hnc_finetune import train_clip_model, preprocess_text_and_images, push_to_hub
 
 
 os.environ["TORCH_EXTENSIONS_DIR"] = "/mount/studenten/team-lab-cl/data2024/w/data/torch_extensions/"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7,8"
+
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 # Paths
 train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
@@ -24,73 +28,64 @@ image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_datas
 config_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/config/deepspeed_config.json'
 
 # Hyperparameters
-batch_size = 32
-epochs = 1
+batch_size = 3
+num_epochs = 3
+learning_rate = 1e-4
+weight_decay = 1e-5
+output_dir = "./fine_tuned_clip"
 
-train_loader = load_data_pairs(
-    json_file_path=train_json_file_path, 
-    image_folder_path=image_folder_path, 
-    batch_size=batch_size, 
-    )
-
-val_loader = load_data_pairs(
-    json_file_path=val_json_file_path, 
-    image_folder_path=image_folder_path, 
-    batch_size=batch_size, 
-    shuffle=False)
-
+# Initialize CLIP Models
+# Load CLIP model: "ViT-B/16","ViT-B/32","ViT-L/14","ViT-L/14@336px"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-'''
-# Display top 5 pairs and random 5 pairs
-for batch_idx, (images, pos_captions, neg_captions, sources, image_paths) in enumerate(train_loader):
-    print(f"\nDisplay TOP 5 pairs: \n--- Batch {batch_idx + 1} ---")
-    for i in range(min(5, len(image_paths))):  
-        print(f"Pair {i + 1}:")
-        print(f"  Image Path: {image_paths[i]}")
-        print(f"  Positive Caption: {pos_captions[i]}")
-        print(f"  Negative Caption: {neg_captions[i]}")
-        print(f"  Source of Negative: {sources[i]}")
-        print("-" * 50)
+# Load ref_encoder
+ref_model = model.eval() 
 
-    print(f"\nDisplay random 5 pairs from each batch: \n--- Batch {batch_idx + 1} ---")
-    random_indices = random.sample(range(len(image_paths)), min(5, len(image_paths)))
-    
-    for i, rand_idx in enumerate(random_indices):
-        print(f"Pair {i + 1}:")
-        print(f"  Image Path: {image_paths[rand_idx]}")
-        print(f"  Positive Caption: {pos_captions[rand_idx]}")
-        print(f"  Negative Caption: {neg_captions[rand_idx]}")
-        print(f"  Source of Negative: {sources[rand_idx]}")
-        print("-" * 50)
+# Load data
+with open(train_json_file_path, 'r') as f:
+    train_annotations = json.load(f)
 
-    break  
-'''
-
-# Load CLIP model: "ViT-B/16","ViT-B/32","ViT-L/14","ViT-L/14@336px"
-model, preprocess = clip.load("ViT-B/32", device=device)
-model.float()
-
-# Freeze text encoder; only train vision encoder
-for name, param in model.named_parameters():
-    if "transformer" in name or "token_embedding" in name or "text_projection" in name:
-        param.requires_grad = False
-
-# Save original parameters
-clip_params = {name: param.clone().detach() for name, param in model.named_parameters()}
+dataset = LoadHNCPair(
+    annotations=train_annotations,
+    image_folder=image_folder_path,
+)
+logging.info("Dataset loaded successfully.")
+sampler = UniqueImageSampler(dataset, batch_size)
+data_loader = DataLoader(dataset, batch_sampler=sampler)
+show_batches(data_loader)
+logging.info("finish data_loader.")
 
 # Define Loss and Optimizer
-criterion = HNC_Loss(clip_params, alpha=0.5, tau=0.07, lambda_=0.1)
+loss_fn = HNC_Loss(
+        temperature=0.1,
+        hard_negative_weight=1.0,
+        l2_reg_weight=1e-3,
+        ref_model=ref_model,
+)
+logging.info("finish loss_fn.")
+
+optimizer = AdamW(model.vision_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+logging.info("finish optimizer.")
 
 # Train the model
-model_engine = train_clip_with_hnc_loss(
-    model,
-    train_loader,
-    val_loader,
-    criterion,
-    epochs=epochs,
-    config_path=config_path
-)
+logging.info("start training.")
+train_clip_model(model, processor, data_loader, loss_fn, optimizer, num_epochs, device)
 
-push_vision_encoder_to_hub(model_engine.module, "HNC_CLIP_ViT", "WenWW")
+# Save the fine-tuned model
+# output_dir = "./fine_tuned_clip"
+# model.save_pretrained(output_dir)
+# processor.save_pretrained(output_dir)
+# logging.info(f"Model saved to {output_dir}")
+
+# Push to hub
+repo_name = "HNC-clip"  # Name for the Hugging Face repository
+push_to_hub(
+    model=model,
+    processor=processor,
+    repo_name=repo_name,
+    output_dir=output_dir,
+    commit_message="Fine-tuned CLIP model for HNC"
+)
