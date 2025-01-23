@@ -27,28 +27,28 @@ class HNC_Loss(nn.Module):
 
     def forward(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, model):
     
-        print('========== Before Normalize=========')
-        print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
-        print(f"Shape of pos_text_embeddings: {pos_text_embeddings.shape}")  # [batch_size, embedding_dim]
-        print(f"Shape of neg_text_embeddings: {neg_text_embeddings.shape}")  # [batch_size, embedding_dim]
+        # print('========== Before Normalize=========')
+        # print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
+        # print(f"Shape of pos_text_embeddings: {pos_text_embeddings.shape}")  # [batch_size, embedding_dim]
+        # print(f"Shape of neg_text_embeddings: {neg_text_embeddings.shape}")  # [batch_size, embedding_dim]
 
-        print(f"image_embeddings: {image_embeddings}")
-        print(f"pos_text_embeddings: {pos_text_embeddings}")
-        print(f"neg_text_embeddings: {neg_text_embeddings}")
+        # print(f"image_embeddings: {image_embeddings}")
+        # print(f"pos_text_embeddings: {pos_text_embeddings}")
+        # print(f"neg_text_embeddings: {neg_text_embeddings}")
 
         # Normalize embeddings
         image_embeddings = F.normalize(image_embeddings, dim=-1)
         pos_text_embeddings = F.normalize(pos_text_embeddings, dim=-1)
         neg_text_embeddings = F.normalize(neg_text_embeddings, dim=-1)
         
-        print('========== After Normalize=========')
-        print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
-        print(f"Shape of pos_text_embeddings: {pos_text_embeddings.shape}")  # [batch_size, embedding_dim]
-        print(f"Shape of neg_text_embeddings: {neg_text_embeddings.shape}")  # [batch_size, embedding_dim]
+        # print('========== After Normalize=========')
+        # print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
+        # print(f"Shape of pos_text_embeddings: {pos_text_embeddings.shape}")  # [batch_size, embedding_dim]
+        # print(f"Shape of neg_text_embeddings: {neg_text_embeddings.shape}")  # [batch_size, embedding_dim]
 
-        print(f"image_embeddings: {image_embeddings}")
-        print(f"pos_text_embeddings: {pos_text_embeddings}")
-        print(f"neg_text_embeddings: {neg_text_embeddings}")
+        # print(f"image_embeddings: {image_embeddings}")
+        # print(f"pos_text_embeddings: {pos_text_embeddings}")
+        # print(f"neg_text_embeddings: {neg_text_embeddings}")
 
         # Compute similarity matrices
         sim_image_to_pos = torch.mm(image_embeddings, pos_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
@@ -97,12 +97,12 @@ class HNC_Loss(nn.Module):
 
         total_loss = contrastive_loss + self.l2_reg_weight * l2_loss
 
-        print(f"diag_image_pos: {diag_image_pos}")
-        print(f"diag_image_neg: {diag_image_neg}")
-        print(f"denom_image_to_text: {denom_image_to_text}")
-        print(f"denom_text_to_image: {denom_text_to_image}")
-        print(f"loss_image_to_text: {loss_image_to_text}, loss_text_to_image: {loss_text_to_image}")
-        print(f"total_loss: {total_loss}")
+        # print(f"diag_image_pos: {diag_image_pos}")
+        # print(f"diag_image_neg: {diag_image_neg}")
+        # print(f"denom_image_to_text: {denom_image_to_text}")
+        # print(f"denom_text_to_image: {denom_text_to_image}")
+        # print(f"loss_image_to_text: {loss_image_to_text}, loss_text_to_image: {loss_text_to_image}")
+        # print(f"total_loss: {total_loss}")
 
         return total_loss
 
