@@ -1,10 +1,6 @@
 import os
-import json
 import logging
-from PIL import Image
-import torch
-from torch.utils.data import Dataset, DataLoader, Sampler
-from torchvision import transforms
+from torch.utils.data import Dataset, Sampler
 import random
 
 logger = logging.getLogger(__name__)
@@ -87,7 +83,7 @@ class UniqueImageSampler(Sampler):
         self.indices = list(range(len(dataset)))
 
     def __iter__(self):
-        # Shuffle indices
+
         random.shuffle(self.indices)
         used_image_paths = set()
 
