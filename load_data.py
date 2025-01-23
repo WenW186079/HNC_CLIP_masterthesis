@@ -6,7 +6,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms
 import random
-import clip
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
@@ -19,7 +18,7 @@ logger.addHandler(console_handler)
 class LoadHNCPair(Dataset):
     def __init__(self, annotations, image_folder, transform=None):
         """
-        Initializes the dataset by creating (image, positive_caption, negative_caption) pairs.
+        Initializes the dataset by creating (image_path, positive_caption, negative_caption) pairs.
         """
         self.annotations = annotations
         self.image_folder = image_folder
@@ -78,12 +77,8 @@ class LoadHNCPair(Dataset):
 
     def __getitem__(self, idx):
         image_path, pos_caption, neg_caption, source = self.data_pairs[idx]
-        image = Image.open(image_path).convert("RGB")
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image, pos_caption, neg_caption, image_path 
+        
+        return image_path, pos_caption, neg_caption
     
 class UniqueImageSampler(Sampler):
     def __init__(self, dataset, batch_size):
@@ -98,7 +93,7 @@ class UniqueImageSampler(Sampler):
 
         batch = []
         for idx in self.indices:
-            image_path, _, _, _ = self.dataset[idx]
+            image_path, _, _ = self.dataset[idx]
             if image_path not in used_image_paths:
                 batch.append(idx)
                 used_image_paths.add(image_path)
@@ -124,42 +119,13 @@ def show_batches(data_loader):
     for batch_idx, batch in enumerate(data_loader):
         if batch_idx == 0:
             print(f"\n[Batch {batch_idx}] Dataset:")
-            for i in range(len(batch[3])): 
-                image = batch[0][i]
-                image_path = batch[3][i]
+            for i in range(len(batch[0])): 
+                image_path = batch[0][i]
                 pos_caption = batch[1][i]
                 neg_caption = batch[2][i]
 
-                print(f"Image: {image}")
-                print(f"Image.shape: {image.shape}")
                 print(f"Image Path: {image_path}")
                 print(f"  Positive Caption: {pos_caption}")
                 print(f"  Negative Caption: {neg_caption}")
             break
 
-# # Example usage:
-# train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
-# val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json'
-# image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-
-# # Initialize CLIP Models
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-# clip_model, preprocess = clip.load("ViT-B/32", device=device)
-# tokenizer = clip.tokenize
-
-# # Load the annotations
-# with open(train_json_file_path, 'r') as f:
-#     train_annotations = json.load(f)
-
-# # Initialize the dataset
-# dataset = LoadHNCPair(
-#     annotations=train_annotations,
-#     image_folder=image_folder_path,
-#     transform=preprocess, 
-# )
-
-# # Create a DataLoader
-# batch_size = 3 
-# sampler = UniqueImageSampler(dataset, batch_size)
-# data_loader = DataLoader(dataset, batch_sampler=sampler)
-# show_batches(data_loader)
