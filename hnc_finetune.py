@@ -4,6 +4,8 @@ import torch
 from PIL import Image  
 import math
 import time
+from transformers import CLIPModel, CLIPProcessor
+from huggingface_hub import HfApi, HfFolder, Repository
 
 def preprocess_text_and_images(batch, processor, device):
     """
@@ -32,26 +34,13 @@ def train_clip_model(model, processor, data_loader, loss_fn, optimizer, num_epoc
     """
     Train the CLIP model's vision encoder.
 
-    Args:
-        model (CLIPModel): Pretrained CLIP model from Hugging Face.
-        processor (CLIPProcessor): Preprocessor for CLIP model.
-        data_loader (DataLoader): DataLoader for training data.
-        loss_fn (nn.Module): Loss function.
-        optimizer (Optimizer): Optimizer for the vision encoder.
-        num_epochs (int): Number of epochs to train for.
-        device (str): Device to train on (e.g., "cuda" or "cpu").
-
-    Returns:
-        None
     """
-
     num_samples = len(data_loader.dataset)  
     batch_size = data_loader.batch_sampler.batch_size if hasattr(data_loader.batch_sampler, 'batch_size') else data_loader.batch_size
     if batch_size is None:
         raise ValueError("Batch size could not be determined. Ensure your DataLoader or Sampler specifies it.")
 
     num_batches = math.ceil(num_samples / batch_size)  
-
 
     wandb.init(
         project="fine-tune-hnc-clip", 
@@ -118,3 +107,23 @@ def train_clip_model(model, processor, data_loader, loss_fn, optimizer, num_epoc
     logging.info(f"Training completed. Total training time: {total_training_time:.2f} seconds.")
     wandb.log({"total_training_time": total_training_time})
     wandb.finish()
+
+def push_to_hub(model, processor, repo_name, output_dir, commit_message="Upload fine-tuned CLIP model"):
+    """
+    Push the fine-tuned model and processor to the Hugging Face Hub.
+
+    """
+    # Save model and processor locally
+    model.save_pretrained(output_dir)
+    processor.save_pretrained(output_dir)
+    logging.info(f"Model saved to {output_dir}")
+
+    # Push to Hugging Face Hub
+    api = HfApi()
+    user = api.whoami()["name"]
+    repo_id = f"{user}/{repo_name}"
+
+    logging.info(f"Pushing model to Hugging Face Hub: {repo_id}")
+    model.push_to_hub(repo_id, commit_message=commit_message)
+    processor.push_to_hub(repo_id, commit_message=commit_message)
+    logging.info("Model and processor successfully pushed to the Hugging Face Hub.")
