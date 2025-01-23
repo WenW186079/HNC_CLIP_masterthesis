@@ -1,17 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-from torch.optim import AdamW
-import clip
-import json
-
-from load_data import LoadHNCPair, UniqueImageSampler, show_batches
 
 def safe_exp(tensor, clamp_min=-10, clamp_max=10):
     """Clamp tensor values before exponentiation to prevent overflow."""
     return torch.exp(tensor.clamp(min=clamp_min, max=clamp_max))
-
 
 class HNC_Loss(nn.Module):
     def __init__(self, temperature=0.07, hard_negative_weight=1.0, l2_reg_weight=1e-3, ref_model=None):
@@ -33,8 +26,12 @@ class HNC_Loss(nn.Module):
             self.ref_model.eval()  
 
     def forward(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, model):
-        
+    
         print('========== Before Normalize=========')
+        print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
+        print(f"Shape of pos_text_embeddings: {pos_text_embeddings.shape}")  # [batch_size, embedding_dim]
+        print(f"Shape of neg_text_embeddings: {neg_text_embeddings.shape}")  # [batch_size, embedding_dim]
+
         print(f"image_embeddings: {image_embeddings}")
         print(f"pos_text_embeddings: {pos_text_embeddings}")
         print(f"neg_text_embeddings: {neg_text_embeddings}")
@@ -45,6 +42,10 @@ class HNC_Loss(nn.Module):
         neg_text_embeddings = F.normalize(neg_text_embeddings, dim=-1)
         
         print('========== After Normalize=========')
+        print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
+        print(f"Shape of pos_text_embeddings: {pos_text_embeddings.shape}")  # [batch_size, embedding_dim]
+        print(f"Shape of neg_text_embeddings: {neg_text_embeddings.shape}")  # [batch_size, embedding_dim]
+
         print(f"image_embeddings: {image_embeddings}")
         print(f"pos_text_embeddings: {pos_text_embeddings}")
         print(f"neg_text_embeddings: {neg_text_embeddings}")
@@ -52,6 +53,7 @@ class HNC_Loss(nn.Module):
         # Compute similarity matrices
         sim_image_to_pos = torch.mm(image_embeddings, pos_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
         sim_image_to_neg = torch.mm(image_embeddings, neg_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
+    
         sim_text_to_image_pos = sim_image_to_pos.t()  # Transpose for text-to-image similarities
         sim_text_to_image_neg = sim_image_to_neg.t()
 
