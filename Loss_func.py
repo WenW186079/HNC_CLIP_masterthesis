@@ -1,13 +1,19 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.utils.data import Dataset, DataLoader
+from torch.optim import AdamW
 import clip
 import json
 
-from load_data import HNCCLIPDataset
+from load_data import LoadHNCPair, UniqueImageSampler, show_batches
 
-class ContrastiveHNCWithL2Loss(nn.Module):
+def safe_exp(tensor, clamp_min=-10, clamp_max=10):
+    """Clamp tensor values before exponentiation to prevent overflow."""
+    return torch.exp(tensor.clamp(min=clamp_min, max=clamp_max))
+
+
+class HNC_Loss(nn.Module):
     def __init__(self, temperature=0.07, hard_negative_weight=1.0, l2_reg_weight=1e-3, ref_model=None):
         """
         Contrastive Loss with Hard Negative and L2 Regularization for CLIP.
@@ -26,26 +32,22 @@ class ContrastiveHNCWithL2Loss(nn.Module):
         if self.ref_model:
             self.ref_model.eval()  
 
-    def forward(self, paired_batch, model):
-        """
-        Compute contrastive loss using paired batch data.
-
-        Args:
-            paired_batch (list): List of (image, positive_caption, hard_negative_caption) tuples.
-            model (torch.nn.Module): The model being trained.
-
-        Returns:
-            loss (Tensor): Total loss value.
-        """
-        # Extract image and text embeddings from paired_batch
-        image_embeddings = torch.stack([pair[0] for pair in paired_batch])  # [batch_size, embedding_dim]
-        pos_text_embeddings = torch.stack([pair[1] for pair in paired_batch])  # [batch_size, embedding_dim]
-        neg_text_embeddings = torch.stack([pair[2] for pair in paired_batch])  # [batch_size, embedding_dim]
+    def forward(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, model):
+        
+        print('========== Before Normalize=========')
+        print(f"image_embeddings: {image_embeddings}")
+        print(f"pos_text_embeddings: {pos_text_embeddings}")
+        print(f"neg_text_embeddings: {neg_text_embeddings}")
 
         # Normalize embeddings
         image_embeddings = F.normalize(image_embeddings, dim=-1)
         pos_text_embeddings = F.normalize(pos_text_embeddings, dim=-1)
         neg_text_embeddings = F.normalize(neg_text_embeddings, dim=-1)
+        
+        print('========== After Normalize=========')
+        print(f"image_embeddings: {image_embeddings}")
+        print(f"pos_text_embeddings: {pos_text_embeddings}")
+        print(f"neg_text_embeddings: {neg_text_embeddings}")
 
         # Compute similarity matrices
         sim_image_to_pos = torch.mm(image_embeddings, pos_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
@@ -61,25 +63,26 @@ class ContrastiveHNCWithL2Loss(nn.Module):
 
         # Compute denominators for image-to-text loss
         denom_image_to_text = (
-            torch.exp(diag_image_pos) +
-            torch.sum(torch.exp(sim_image_to_pos), dim=1) - torch.exp(diag_image_pos) +  # Random negatives
-            self.hard_negative_weight * torch.exp(diag_image_neg) +
-            torch.sum(torch.exp(sim_image_to_neg), dim=1) - torch.exp(diag_image_neg)  # Hard negatives
+            safe_exp(diag_image_pos) +
+            torch.sum(safe_exp(sim_image_to_pos), dim=1) - safe_exp(diag_image_pos) +  
+            self.hard_negative_weight * safe_exp(diag_image_neg) +
+            torch.sum(safe_exp(sim_image_to_neg), dim=1) - safe_exp(diag_image_neg)  
         )
 
         # Compute denominators for text-to-image loss
         denom_text_to_image = (
-            torch.exp(diag_text_pos) +
-            torch.sum(torch.exp(sim_text_to_image_pos), dim=1) - torch.exp(diag_text_pos) +  # Random negatives
-            self.hard_negative_weight * torch.exp(diag_text_neg) +
-            torch.sum(torch.exp(sim_text_to_image_neg), dim=1) - torch.exp(diag_text_neg)  # Hard negatives
+            safe_exp(diag_text_pos) +
+            torch.sum(safe_exp(sim_text_to_image_pos), dim=1) - safe_exp(diag_text_pos) +  
+            self.hard_negative_weight * safe_exp(diag_text_neg) +
+            torch.sum(safe_exp(sim_text_to_image_neg), dim=1) - safe_exp(diag_text_neg) 
         )
 
-        # Compute losses
-        loss_image_to_text = -torch.mean(torch.log(torch.exp(diag_image_pos) / denom_image_to_text))
-        loss_text_to_image = -torch.mean(torch.log(torch.exp(diag_text_pos) / denom_text_to_image))
+        denom_image_to_text = denom_image_to_text + 1e-8
+        denom_text_to_image = denom_text_to_image + 1e-8
 
-        # Combine contrastive losses
+        # Compute losses
+        loss_image_to_text = -torch.mean(torch.log(safe_exp(diag_image_pos) / denom_image_to_text))
+        loss_text_to_image = -torch.mean(torch.log(safe_exp(diag_text_pos) / denom_text_to_image))
         contrastive_loss = 0.5 * (loss_image_to_text + loss_text_to_image)
 
         # L2 regularization
@@ -91,66 +94,13 @@ class ContrastiveHNCWithL2Loss(nn.Module):
                     l2_loss += torch.sum((current_param - ref_param) ** 2)
 
         total_loss = contrastive_loss + self.l2_reg_weight * l2_loss
+
+        print(f"diag_image_pos: {diag_image_pos}")
+        print(f"diag_image_neg: {diag_image_neg}")
+        print(f"denom_image_to_text: {denom_image_to_text}")
+        print(f"denom_text_to_image: {denom_text_to_image}")
+        print(f"loss_image_to_text: {loss_image_to_text}, loss_text_to_image: {loss_text_to_image}")
+        print(f"total_loss: {total_loss}")
+
         return total_loss
 
-
-train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
-val_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json'
-image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
-
-# Load the CLIP model
-device = "cuda" if torch.cuda.is_available() else "cpu"
-clip_model, preprocess = clip.load("ViT-B/32", device=device)
-ref_model = clip_model.eval()  # Reference model for L2 regularization
-tokenizer = clip.tokenize
-
-# Load annotations
-with open(train_json_file_path, 'r') as f:
-    train_annotations = json.load(f)
-
-# Initialize dataset and DataLoader
-dataset = HNCCLIPDataset(
-    annotations=train_annotations,
-    image_folder=image_folder_path,
-    transform=preprocess
-)
-data_loader = DataLoader(dataset, batch_size=3, shuffle=True)
-
-# Initialize the loss function
-loss_fn = ContrastiveHNCWithL2Loss(
-    temperature=0.07,
-    hard_negative_weight=1.0,
-    l2_reg_weight=1e-3,
-    ref_model=ref_model
-)
-
-# Optimizer for vision encoder only
-vision_params = [param for name, param in clip_model.named_parameters() if "visual" in name and param.requires_grad]
-optimizer = torch.optim.Adam(vision_params, lr=1e-4)
-
-# Training loop
-for epoch in range(5):  # Number of epochs
-    clip_model.train()
-    for batch in data_loader:
-        # Generate paired data using the unique pair function
-        paired_batch = HNCCLIPDataset.pair_data_tensor_unique(batch, tokenizer)
-
-        # Compute embeddings for images and captions
-        paired_batch = [
-            (
-                clip_model.encode_image(image.unsqueeze(0)).squeeze(0),
-                clip_model.encode_text(pos_caption).squeeze(0),
-                clip_model.encode_text(neg_caption).squeeze(0),
-            )
-            for image, pos_caption, neg_caption in paired_batch
-        ]
-
-        # Compute the loss
-        loss = loss_fn(paired_batch, clip_model)
-
-        # Backpropagation and optimization
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        print(f"Epoch {epoch+1}, Loss: {loss.item()}")
