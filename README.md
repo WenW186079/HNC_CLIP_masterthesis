@@ -37,9 +37,13 @@ export TORCH_EXTENSIONS_DIR=/mount/studenten/team-lab-cl/data2024/w/data/torch_e
 echo $TORCH_EXTENSIONS_DIR
 
 ```
+### Login Huggingface and wandb
+```
+huggingface-cli login
+wandb login 
+```
+
 ### Use deepspeed run the code
 ```
-deepspeed --num_gpus=8 main.py
-# or
-deepspeed --include="localhost:0,2,3,4,5,6,7,8" main.py
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 deepspeed main_deepspeed.py
 ```
