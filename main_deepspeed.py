@@ -1,17 +1,3 @@
-# import os
-# import json
-# import logging
-# from PIL import Image  
-# import torch
-# from torch.utils.data import DataLoader  
-# from torch.optim import AdamW
-# from transformers import CLIPModel, CLIPProcessor
-# from torch.nn import functional as F
-# from huggingface_hub import HfApi, HfFolder, Repository
-# import deepspeed  
-# import wandb
-# import yaml
-
 import yaml
 import logging
 import json
@@ -19,13 +5,20 @@ import os
 import wandb
 import torch
 import deepspeed
+import deepspeed.comm as dist 
 from transformers import CLIPModel, CLIPProcessor
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from load_data import LoadHNCPair, UniqueImageSampler, show_batches
 from loss_func import safe_exp, HNC_Loss
 from hnc_finetune_deepspeed import train_clip_model, preprocess_text_and_images, push_to_hub
+
+deepspeed.init_distributed()
+
+if not dist.is_initialized():
+    dist.init_process_group(backend='nccl')
 
 os.environ["TORCH_EXTENSIONS_DIR"] = "/mount/studenten/team-lab-cl/data2024/w/data/torch_extensions/"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5,6,7,8"
@@ -45,6 +38,7 @@ batch_size = CONFIG["training"]["batch_size"]
 learning_rate = CONFIG["training"]["learning_rate"]
 output_dir = CONFIG["misc"]["output_dir"]
 repo_name = CONFIG["misc"]["repo_name"]
+train_micro_batch_size_per_gpu = CONFIG["deepspeed"]["config"]["train_micro_batch_size_per_gpu"]
 
 # DeepSpeed configuration
 deepspeed_config = CONFIG["deepspeed"]["config"]
@@ -63,12 +57,17 @@ ref_model = model.eval()
 with open(train_json_path, 'r') as f:
     train_annotations = json.load(f)
 
-dataset = LoadHNCPair(
-    annotations=train_annotations,
-    image_folder=image_folder_path,
+dataset = LoadHNCPair(annotations=train_annotations,image_folder=image_folder_path)
+data_loader = DataLoader(
+    dataset,
+    batch_size=train_micro_batch_size_per_gpu, 
+    sampler=DistributedSampler(dataset, num_replicas=8, rank=dist.get_rank()),
 )
-sampler = UniqueImageSampler(dataset, batch_size)
-data_loader = DataLoader(dataset, batch_sampler=sampler)
+
+if dist.get_rank() == 0:
+    logging.info(f"Dataset size: {len(dataset)}, Batch size: {train_micro_batch_size_per_gpu}")
+    logging.info(f"Number of batches: {len(data_loader)}")
+
 # show_batches(data_loader)
 logging.info("finish data_loader.")
 
@@ -79,7 +78,6 @@ loss_fn = HNC_Loss(
     l2_reg_weight=CONFIG["training"]["l2_reg_weight"],
     ref_model=ref_model,
 )
-
 
 # Define the optimizer using AdamW
 optimizer = AdamW(
@@ -99,7 +97,7 @@ model_engine, _ , _, _ = deepspeed.initialize(
     config=deepspeed_config,
     optimizer=optimizer,
 )
-
+logging.info(f"DeepSpeed configuration: {model_engine.config}")
 torch.cuda.empty_cache()
 
 # Train the models
