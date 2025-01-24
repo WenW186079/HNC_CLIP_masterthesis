@@ -24,6 +24,7 @@ class HNC_Loss(nn.Module):
         self.ref_model = ref_model
         if self.ref_model:
             self.ref_model.eval()  
+            self.ref_model_params = {name: param.clone().detach().cpu() for name, param in self.ref_model.named_parameters()}
 
     def forward(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, model):
     
@@ -91,8 +92,8 @@ class HNC_Loss(nn.Module):
         l2_loss = 0.0
         if self.ref_model is not None:
             for name, current_param in model.named_parameters():
-                if name in dict(self.ref_model.named_parameters()):
-                    ref_param = dict(self.ref_model.named_parameters())[name]
+                if name in self.ref_model_params:
+                    ref_param = self.ref_model_params[name].to(current_param.device)  
                     l2_loss += torch.sum((current_param - ref_param) ** 2)
 
         total_loss = contrastive_loss + self.l2_reg_weight * l2_loss
