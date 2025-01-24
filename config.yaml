@@ -1,0 +1,34 @@
+dataset:
+  train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json"
+  image_folder_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images"
+
+training:
+  num_epochs: 20
+  batch_size: 256
+  learning_rate: 1.0e-5
+  weight_decay: 1.0e-5
+  temperature: 0.07
+  hard_negative_weight: 1.5
+  l2_reg_weight: 1.0e-3
+
+deepspeed:
+  config:
+    train_batch_size: 256
+    train_micro_batch_size_per_gpu: 16
+    gradient_accumulation_steps: 2
+    gradient_checkpointing: true
+    gradient_clipping: 1.0
+    fp16:
+      enabled: true
+      initial_scale_power: 16
+      loss_scale: 4096
+      loss_scale_window: 1000
+      hysteresis: 2
+      min_loss_scale: 1
+    zero_optimization:
+      stage: 2
+
+misc:
+  output_dir: "./fine_tuned_clip"
+  repo_name: "HNC-clip"
+  wandb_project_name: "fine-tune-hnc-clip"
