@@ -21,11 +21,12 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7,8"
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 # Paths
-train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
+train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json'
+# train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
 image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
 
 # Hyperparameters
-batch_size = 32
+batch_size = 128
 num_epochs = 1
 learning_rate = 1e-4
 weight_decay = 1e-5
@@ -52,7 +53,7 @@ dataset = LoadHNCPair(
 logging.info("Dataset loaded successfully.")
 sampler = UniqueImageSampler(dataset, batch_size)
 data_loader = DataLoader(dataset, batch_sampler=sampler)
-show_batches(data_loader)
+# show_batches(data_loader)
 logging.info("finish data_loader.")
 
 # Define Loss and Optimizer
@@ -72,7 +73,7 @@ logging.info("start training.")
 train_clip_model(model, processor, data_loader, loss_fn, optimizer, num_epochs, device)
 
 # Push to hub
-repo_name = "HNC-clip"  
+repo_name = "HNC_clip_32"  
 push_to_hub(
     model=model,
     processor=processor,
@@ -80,3 +81,4 @@ push_to_hub(
     output_dir=output_dir,
     commit_message="Fine-tuned CLIP model for HNC"
 )
+    
