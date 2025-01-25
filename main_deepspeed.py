@@ -25,7 +25,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5,6,7,8"
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
-with open("config.yaml", "r") as f:
+with open("config/config_1.5.yaml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 # Dataset and paths
@@ -58,10 +58,16 @@ with open(train_json_path, 'r') as f:
     train_annotations = json.load(f)
 
 dataset = LoadHNCPair(annotations=train_annotations,image_folder=image_folder_path)
+sampler = DistributedSampler(
+    dataset,
+    num_replicas=dist.get_world_size(),
+    rank=dist.get_rank(),
+    shuffle=True
+)
 data_loader = DataLoader(
     dataset,
     batch_size=train_micro_batch_size_per_gpu, 
-    sampler=DistributedSampler(dataset, num_replicas=8, rank=dist.get_rank()),
+    sampler=sampler,
 )
 
 if dist.get_rank() == 0:
@@ -106,18 +112,17 @@ train_clip_model(
     model_engine=model_engine,
     processor=processor,
     data_loader=data_loader,
+    sampler=sampler,
     loss_fn=loss_fn,
     optimizer=optimizer,
     num_epochs=num_epochs,
     device=device,
-    learning_rate=learning_rate,
+    learning_rate=learning_rate
 )
 
 # Push to hub
 push_to_hub(
     model=model,
     processor=processor,
-    repo_name=repo_name,
-    output_dir=output_dir,
-    commit_message="Fine-tuned CLIP model for HNC"
+    repo_name=repo_name
 )
