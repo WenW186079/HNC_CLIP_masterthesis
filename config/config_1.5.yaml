@@ -21,7 +21,7 @@ deepspeed:
     gradient_clipping: 1.0
     fp16:
       enabled: true
-      initial_scale_power: 16
+      initial_scale_power: 14
     zero_optimization:
       stage: 2
     scheduler:
