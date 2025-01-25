@@ -70,7 +70,7 @@ def preprocess_text_and_images(batch, processor, device):
 
     return inputs["pixel_values"], pos_text_inputs, neg_text_inputs
 
-def train_clip_model(model_engine, processor, data_loader, loss_fn, optimizer, num_epochs, device,learning_rate):
+def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, optimizer, num_epochs, device,learning_rate):
     """
     Train the CLIP model's vision encoder.
 
@@ -104,6 +104,8 @@ def train_clip_model(model_engine, processor, data_loader, loss_fn, optimizer, n
     best_loss = float('inf')
 
     for epoch in range(num_epochs):
+        sampler.set_epoch(epoch)
+
         if dist.get_rank() == 0:
             logging.info(f"Epoch {epoch + 1}/{num_epochs} begins.")
        
@@ -162,22 +164,30 @@ def train_clip_model(model_engine, processor, data_loader, loss_fn, optimizer, n
 
     wandb.finish()
 
-def push_to_hub(model, processor, repo_name, output_dir, commit_message="Upload fine-tuned CLIP model"):
+    # Push the best model to Hugging Face
+    if dist.get_rank() == 0:
+
+        best_model = CLIPModel.from_pretrained(best_model_dir)
+        best_processor = CLIPProcessor.from_pretrained(best_model_dir)
+
+        push_to_hub(
+            model=best_model,
+            processor=best_processor,
+            repo_name='best_model_hnc'
+        )
+
+
+def push_to_hub(model, processor, repo_name):
     """
     Push the fine-tuned model and processor to the Hugging Face Hub.
 
     """
-    # Save model and processor locally
-    model.save_pretrained(output_dir)
-    processor.save_pretrained(output_dir)
-    logging.info(f"Model saved to {output_dir}")
-
     # Push to Hugging Face Hub
     api = HfApi()
     user = api.whoami()["name"]
     repo_id = f"{user}/{repo_name}"
 
     logging.info(f"Pushing model to Hugging Face Hub: {repo_id}")
-    model.push_to_hub(repo_id, commit_message=commit_message)
-    processor.push_to_hub(repo_id, commit_message=commit_message)
+    model.push_to_hub(repo_id, commit_message="Upload fine-tuned CLIP model")
+    processor.push_to_hub(repo_id, commit_message="Upload fine-tuned CLIP model")
     logging.info("Model and processor successfully pushed to the Hugging Face Hub.")
