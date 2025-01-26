@@ -7,14 +7,6 @@ from huggingface_hub import HfApi
 import deepspeed.comm as dist
 import os
 
-'''
-
-This version added:
-    train with deepspeed
-    SGDR: STOCHASTIC GRADIENT DESCENT WITH WARM RESTARTS
-
-'''
-
 # def preprocess_text_and_images(batch, processor, device):
 #     """
 #     Preprocess the batch data: images, positive captions, and negative captions.
