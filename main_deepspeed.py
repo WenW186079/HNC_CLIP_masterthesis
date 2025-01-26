@@ -15,6 +15,18 @@ from load_data import LoadHNCPair, UniqueImageSampler, show_batches
 from loss_func import safe_exp, HNC_Loss
 from hnc_finetune_deepspeed import train_clip_model, preprocess_text_and_images, push_to_hub
 
+# best_model_dir = f"./best_model/"
+# best_model = CLIPModel.from_pretrained(best_model_dir)
+# best_processor = CLIPProcessor.from_pretrained(best_model_dir)
+
+# push_to_hub(
+#             model=best_model,
+#             processor=best_processor,
+#             repo_name='best_model_hnc'
+#         )
+# print('pushed')
+
+
 deepspeed.init_distributed()
 
 if not dist.is_initialized():
@@ -25,7 +37,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5,6,7,8"
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
-with open("config/config_1.5.yaml", "r") as f:
+with open("config/config_2.0.yaml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 # Dataset and paths
@@ -39,6 +51,8 @@ learning_rate = CONFIG["training"]["learning_rate"]
 output_dir = CONFIG["misc"]["output_dir"]
 repo_name = CONFIG["misc"]["repo_name"]
 train_micro_batch_size_per_gpu = CONFIG["deepspeed"]["config"]["train_micro_batch_size_per_gpu"]
+betas=(0.9, 0.98)
+eps=1e-6
 
 # DeepSpeed configuration
 deepspeed_config = CONFIG["deepspeed"]["config"]
@@ -90,6 +104,8 @@ optimizer = AdamW(
     model.vision_model.parameters(),
     lr=learning_rate,
     weight_decay=CONFIG["training"]["weight_decay"],
+    betas=betas, 
+    eps=eps,
 )
 
 for param in model.parameters():
