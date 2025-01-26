@@ -6,7 +6,7 @@ dataset:
 training:
   num_epochs: 3
   batch_size: 256
-  learning_rate: 4.0e-4
+  learning_rate: 0.0002
   weight_decay: 1.0e-5
   temperature: 0.07
   hard_negative_weight: 1.0
@@ -15,21 +15,22 @@ training:
 deepspeed:
   config:
     train_batch_size: 256
-    train_micro_batch_size_per_gpu: 8
+    train_micro_batch_size_per_gpu: 16
     gradient_accumulation_steps: 4
     gradient_checkpointing: true
     gradient_clipping: 1.0
     fp16:
       enabled: true
-      initial_scale_power: 14
+      initial_scale_power: 12
+      hysteresis: 3
     zero_optimization:
       stage: 2
     scheduler:
       type: "WarmupLR"
       params:
         warmup_min_lr: 0
-        warmup_max_lr: 4.0e-4
-        warmup_num_steps: 500
+        warmup_max_lr: 0.0002
+        warmup_num_steps: 1000
 
 misc:
   output_dir: "./fine_tuned_clip_1.0"
