@@ -1,6 +1,5 @@
 dataset:
   train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json"
-  # train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json"
   image_folder_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images"
 
 training:
