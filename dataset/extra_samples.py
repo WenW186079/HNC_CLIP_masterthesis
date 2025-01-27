@@ -24,5 +24,5 @@ def display_top_n_samples(json_file_path, n=5):
         print(f"An unexpected error occurred: {e}")
 
 
-json_file_path = "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json"
+json_file_path = "./HNC/hnc_clean_strict_train.json"
 display_top_n_samples(json_file_path, n=5)
