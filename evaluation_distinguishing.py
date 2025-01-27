@@ -15,8 +15,8 @@ batch_size = 32
 val_path="/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_10_percent.json"
 image_folder_path = "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images" 
 
-# model_name="openai/clip-vit-base-patch32" 
-model_name='Nano1337/openclip-negclip' 
+model_name="openai/clip-vit-base-patch32" 
+# model_name='Nano1337/openclip-negclip' 
 # model_name= 'WenWW/HNC_CLIP_B32_1.0' 
 
 
