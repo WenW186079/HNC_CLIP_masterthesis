@@ -14,16 +14,11 @@ from load_data import LoadHNCPair, UniqueImageSampler, show_batches
 from loss_func import safe_exp, HNC_Loss
 from hnc_finetune import train_clip_model, preprocess_text_and_images, push_to_hub
 
-
-os.environ["TORCH_EXTENSIONS_DIR"] = "/mount/studenten/team-lab-cl/data2024/w/data/torch_extensions/"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7,8"
-
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 # Paths
-train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json'
-# train_json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json'
-image_folder_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images'
+train_json_file_path = './HNC/hnc_clean_strict_train.json'
+image_folder_path = './gqa_dataset/images/images'
 
 # Hyperparameters
 batch_size = 128
@@ -56,7 +51,6 @@ data_loader = DataLoader(dataset, batch_sampler=sampler)
 # show_batches(data_loader)
 logging.info("finish data_loader.")
 
-# Define Loss and Optimizer
 loss_fn = HNC_Loss(
         temperature=0.1,
         hard_negative_weight=1.0,
