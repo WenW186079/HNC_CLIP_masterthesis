@@ -13,10 +13,8 @@ def preprocess_text_and_images(batch, processor, device):
     """
     image_paths, pos_captions, neg_captions = batch
 
-    # Load and preprocess images
     images = [Image.open(image_path).convert("RGB") for image_path in image_paths]
 
-    # Use CLIPProcessor for preprocessing
     inputs = processor(
         images=images,
         text=pos_captions + neg_captions,
@@ -71,7 +69,6 @@ def train_clip_model(model, processor, data_loader, loss_fn, optimizer, num_epoc
 
         for batch_idx, batch in enumerate(data_loader):
             batch_start_time = time.time()
-            # Preprocess batch data
             pixel_values, pos_text_inputs, neg_text_inputs = preprocess_text_and_images(batch, processor, device)
 
             # Forward pass for image and text embeddings
