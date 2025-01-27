@@ -7,17 +7,19 @@ set -e
 PYTHON_FILE="eval_distinguish.py"    
 # PYTHON_FILE="eval_retrieval.py" 
 
+
 # ===path for hnc===
-# DATASET_TYPE="hnc"   # 'hnc' or 'coco'
-# IMAGE_FOLDER="./gqa_dataset/images/images" 
-# DATASET_PATH="./HNC/hnc_val_sampled_1_percent.json"
+DATASET_TYPE="hnc"   # 'hnc' or 'coco'
+IMAGE_FOLDER="./gqa_dataset/images/images" 
+DATASET_PATH="./HNC/hnc_val_sampled_1_percent.json"
 # DATASET_PATH="./HNC/hnc_clean_strict_val.json"
 # DATASET_PATH="./HNC/hnc_val_sampled_10_percent.json"
 
+
 # ===path for coco===
-DATASET_TYPE="coco"  # 'hnc' or 'coco'
-IMAGE_FOLDER="./Coco/val2014" 
-DATASET_PATH="./Coco/test_coco_aug_withneg.json"
+# DATASET_TYPE="coco"  # 'hnc' or 'coco'
+# IMAGE_FOLDER="./Coco/val2014" 
+# DATASET_PATH="./Coco/test_coco_aug_withneg.json"
   
 
 # ===model_name===
