@@ -1,0 +1,41 @@
+dataset:
+  train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json"
+  # train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_train_sampled_1_percent.json"
+  # train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_10_percent.json"
+  image_folder_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images"
+
+training:
+  num_epochs: 30
+  batch_size: 64
+  learning_rate: 2.0e-6
+  weight_decay: 0.05
+  temperature: 0.07
+  hard_negative_weight: 5.0
+  dynamic_hard_negative: true 
+  hard_negative_max_weight: 15.0
+  l2_reg_weight: 1.0e-4
+  
+
+deepspeed:
+  config:
+    train_batch_size: 64
+    train_micro_batch_size_per_gpu: 16
+    gradient_accumulation_steps: 1
+    gradient_checkpointing: true
+    gradient_clipping: 1.0
+    fp16:
+      enabled: true
+      initial_scale_power: 12
+      hysteresis: 5
+      dynamic_loss_scale: true
+    zero_optimization:
+      stage: 2
+    scheduler:
+      type: "WarmupLR"
+      params:
+        warmup_min_lr: 0
+        warmup_max_lr: 2.0e-6
+        warmup_num_steps: 2000
+
+misc:
+  repo_name: "HNC_clip_D5.0"
