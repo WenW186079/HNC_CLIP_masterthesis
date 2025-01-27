@@ -4,8 +4,8 @@
 set -e
 
 # Variables
-DATASET_PATH="/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_10_percent.json"  
-IMAGE_FOLDER="/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images" 
+DATASET_PATH="./HNC/hnc_val_sampled_10_percent.json"  
+IMAGE_FOLDER="./gqa_dataset/images/images" 
 MODEL_NAME="WenWW/HNC_CLIP_B32_1.0"        
 DATASET_TYPE="hnc"   # 'hnc' or 'coco'
 BATCH_SIZE=32                            
@@ -13,14 +13,14 @@ PYTHON_FILE="eval_distinguish.py"
 
 
 # ===path for hnc===
-# IMAGE_FOLDER = "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images" 
-# DATASET_PATH = "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_1_percent.json"
-# DATASET_PATH = "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json"
-# DATASET_PATH = "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_val_sampled_10_percent.json"
+# IMAGE_FOLDER = "./gqa_dataset/images/images" 
+# DATASET_PATH = "./HNC/hnc_val_sampled_1_percent.json"
+# DATASET_PATH = "./HNC/hnc_clean_strict_val.json"
+# DATASET_PATH = "./HNC/hnc_val_sampled_10_percent.json"
 
 # ===path for coco===
-# IMAGE_FOLDER = "..." 
-# DATASET_PATH = "..."
+# IMAGE_FOLDER = "./Coco/val2014" 
+# DATASET_PATH = "./Coco/test_coco_aug_withneg.json"
 
 # ===model_name===
 # MODEL_NAME= "openai/clip-vit-base-patch32" 
