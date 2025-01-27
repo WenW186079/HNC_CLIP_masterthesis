@@ -20,11 +20,19 @@ class HNC_Loss(nn.Module):
         super().__init__()
         self.temperature = temperature
         self.hard_negative_weight = hard_negative_weight
+        self.base_hard_negative_weight = hard_negative_weight
         self.l2_reg_weight = l2_reg_weight
         self.ref_model = ref_model
         if self.ref_model:
             self.ref_model.eval()  
             self.ref_model_params = {name: param.clone().detach().cpu() for name, param in self.ref_model.named_parameters()}
+
+    def update_hard_negative_weight(self, epoch, total_epochs):
+        """
+        Dynamically update the hard negative weight based on the current epoch.
+        """
+        self.hard_negative_weight = self.base_hard_negative_weight * (1 + epoch / total_epochs)
+
 
     def forward(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, model):
     
@@ -55,7 +63,7 @@ class HNC_Loss(nn.Module):
         sim_image_to_pos = torch.mm(image_embeddings, pos_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
         sim_image_to_neg = torch.mm(image_embeddings, neg_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
     
-        sim_text_to_image_pos = sim_image_to_pos.t()  # Transpose for text-to-image similarities
+        sim_text_to_image_pos = sim_image_to_pos.t()  
         sim_text_to_image_neg = sim_image_to_neg.t()
 
         # Extract diagonals
