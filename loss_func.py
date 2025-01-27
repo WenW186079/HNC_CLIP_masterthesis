@@ -63,7 +63,7 @@ class HNC_Loss(nn.Module):
         sim_image_to_pos = torch.mm(image_embeddings, pos_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
         sim_image_to_neg = torch.mm(image_embeddings, neg_text_embeddings.t()) / self.temperature  # [batch_size, batch_size]
     
-        sim_text_to_image_pos = sim_image_to_pos.t()  
+        sim_text_to_image_pos = sim_image_to_pos.t() 
         sim_text_to_image_neg = sim_image_to_neg.t()
 
         # Extract diagonals
