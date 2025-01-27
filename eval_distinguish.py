@@ -61,7 +61,7 @@ def distinguish_clip(model, processor, dataset, device, batch_size=32):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate HNC CLIP Model")
+    parser = argparse.ArgumentParser(description="Evaluate CLIP Model")
     parser.add_argument("--dataset", type=str, required=True, help="Path to the dataset JSON file.")
     parser.add_argument("--image_folder", type=str, required=True, help="Path to the image folder.")
     parser.add_argument("--model_name", type=str, required=True, help="Name of the CLIP model to use.")
@@ -82,7 +82,7 @@ def main():
         eval_dataset = LoadCOCOPair(annotations=eval_annotations, image_folder=args.image_folder)
 
     accuracy = distinguish_clip(model, processor, eval_dataset, device, batch_size=args.batch_size)
-    print(f"Model {args.model_name}: Validation Accuracy: {accuracy * 100:.2f}%")
+    print(f"Model {args.model_name}: Accuracy: {accuracy * 100:.2f}%")
 
 if __name__ == "__main__":
     main()
