@@ -33,8 +33,8 @@ unzip images.zip -d ./images
 
 ### Download Coco dataset for evaluation
 ```
-mkdir coco_dataset
-cd coco_dataset
+mkdir Coco
+cd Coco
 
 wget http://images.cocodataset.org/zips/val2014.zip
 unzip val2014.zip -d ./val2014
