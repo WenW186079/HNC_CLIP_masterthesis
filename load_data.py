@@ -12,13 +12,12 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 class LoadHNCPair(Dataset):
-    def __init__(self, annotations, image_folder, transform=None):
+    def __init__(self, annotations, image_folder):
         """
         Initializes the dataset by creating (image_path, positive_caption, negative_caption) pairs.
         """
         self.annotations = annotations
         self.image_folder = image_folder
-        self.transform = transform
         self.data_pairs = [] 
         self.hnc_count = 0
         self.positive_count = 0
@@ -76,36 +75,6 @@ class LoadHNCPair(Dataset):
         
         return image_path, pos_caption, neg_caption
     
-class UniqueImageSampler(Sampler):
-    def __init__(self, dataset, batch_size):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.indices = list(range(len(dataset)))
-
-    def __iter__(self):
-
-        random.shuffle(self.indices)
-        used_image_paths = set()
-
-        batch = []
-        for idx in self.indices:
-            image_path, _, _ = self.dataset[idx]
-            if image_path not in used_image_paths:
-                batch.append(idx)
-                used_image_paths.add(image_path)
-
-                if len(batch) == self.batch_size:
-                    yield batch
-                    batch = []
-                    used_image_paths.clear()  
-
-        # Yield the last batch if it's not empty
-        if batch:
-            yield batch
-
-    def __len__(self):
-        return len(self.indices) // self.batch_size
-
 
 def show_batches(data_loader):
     """
@@ -124,4 +93,43 @@ def show_batches(data_loader):
                 print(f"  Positive Caption: {pos_caption}")
                 print(f"  Negative Caption: {neg_caption}")
             break
+            
 
+class LoadCOCOPair(Dataset):
+    def __init__(self, annotations, image_folder):
+        self.annotations = annotations
+        self.image_folder = image_folder
+        self.data_pairs = [] 
+        self.neg_count = 0
+        self.positive_count = 0
+
+        logger.info("Creating COCO image-POS-HNC pairs...")
+        missing_images_count = 0
+
+        for data in annotations:
+            image_filename = data.get("image")
+            image_path = os.path.join(self.image_folder, image_filename)
+            
+            if os.path.exists(image_path):
+                pos_caption = data.get("text")  
+                neg_caption = data.get("neg_text") 
+                
+                if pos_caption and neg_caption:
+                    self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
+                    self.positive_count += 1
+                    self.neg_count += 1
+            else:
+                missing_images_count += 1
+                logger.warning(f"❗️Missing image: {image_path}")
+
+        logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
+        logger.info(f"Total Pos samples: {self.positive_count}")
+        logger.info(f"Total COCONEG samples: {self.neg_count}")
+
+    def __len__(self):
+        return len(self.data_pairs)
+
+    def __getitem__(self, idx):
+        image_path, pos_caption, neg_caption, source = self.data_pairs[idx]
+        
+        return image_path, pos_caption, neg_caption
