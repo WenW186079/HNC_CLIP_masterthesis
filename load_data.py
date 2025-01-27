@@ -93,7 +93,8 @@ def show_batches(data_loader):
                 print(f"  Positive Caption: {pos_caption}")
                 print(f"  Negative Caption: {neg_caption}")
             break
-            
+
+
 
 class LoadCOCOPair(Dataset):
     def __init__(self, annotations, image_folder):
@@ -103,7 +104,7 @@ class LoadCOCOPair(Dataset):
         self.neg_count = 0
         self.positive_count = 0
 
-        logger.info("Creating COCO image-POS-HNC pairs...")
+        logger.info("Creating COCO image-POS-NEG pairs...")
         missing_images_count = 0
 
         for data in annotations:
@@ -112,7 +113,7 @@ class LoadCOCOPair(Dataset):
             
             if os.path.exists(image_path):
                 pos_caption = data.get("text")  
-                neg_caption = data.get("neg_text") 
+                neg_caption = data.get("neg_text")  
                 
                 if pos_caption and neg_caption:
                     self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
