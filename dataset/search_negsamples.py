@@ -1,6 +1,6 @@
 import json
 
-json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_val.json'
+json_file_path = './HNC/hnc_clean_strict_val.json'
 
 def search_hnc_negatives(json_file_path, target_image_id, target_caption):
     """
