@@ -39,7 +39,6 @@ def distinguish_clip(model, processor, dataset, device, batch_size=32):
                     captions.append(neg)
                     labels.append(0)
 
-
             text_inputs = processor(text=captions, return_tensors="pt", padding=True).to(device)
 
             image_features = model.get_image_features(**inputs)
