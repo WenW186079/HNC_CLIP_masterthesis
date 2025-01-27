@@ -63,9 +63,15 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 deepspeed main_deepspeed.py
 ```
 
 ## Evaluation
-Approach 1: Distinguishing posivite text from HNC (GQA dataset)
+Approach 1: Distinguishing posivite text from negative
+- GQA dataset
+- Coco dataset
+
 ```
-python evaluation_distinguishing.py
+chmod +x run_evaluation.sh
+
+# Adjust the file path and run the script
+./run_evaluation.sh
 ```
 
 Approach 2: Retrieval (Coco dataset)
