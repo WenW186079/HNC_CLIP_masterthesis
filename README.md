@@ -33,6 +33,9 @@ unzip images.zip -d ./images
 
 ### Download Coco dataset for evaluation
 ```
+mkdir coco_dataset
+cd coco_dataset
+
 wget http://images.cocodataset.org/zips/val2014.zip
 unzip val2014.zip -d ./val2014
 ```
@@ -58,12 +61,13 @@ wandb login
 ### Use deepspeed run the code
 
 - ⚠️[TODO]: USE ARG
+- ⚠️[TODO]: find best hyper parameters
 ```
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 deepspeed main_deepspeed.py
 ```
 
 ## Evaluation
-Approach 1: Distinguishing posivite text from negative
+Approach 1: Distinguishing posivite text from negative text
 - GQA dataset
 - Coco dataset
 
@@ -74,7 +78,9 @@ chmod +x run_evaluation.sh
 ./run_evaluation.sh
 ```
 
-Approach 2: Retrieval (Coco dataset)
+Approach 2: Retrieval 
+- GQA dataset
+- Coco dataset
 ```
 #⚠️TODO
 ```
