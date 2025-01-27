@@ -82,7 +82,7 @@ def main():
         eval_dataset = LoadCOCOPair(annotations=eval_annotations, image_folder=args.image_folder)
 
     accuracy = distinguish_clip(model, processor, eval_dataset, device, batch_size=args.batch_size)
-    print(f"Model {args.model_name}: Accuracy: {accuracy * 100:.2f}%")
+    print(f"Data: {args.dataset_type}. Model: {args.model_name}. Accuracy: {accuracy * 100:.2f}%")
 
 if __name__ == "__main__":
     main()
