@@ -1,6 +1,6 @@
 import json
 
-json_file_path = '/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json'
+json_file_path = './HNC/hnc_clean_strict_train.json'
 
 with open(json_file_path, 'r') as f:
     annotations = json.load(f)
