@@ -6,25 +6,7 @@ from transformers import CLIPModel, CLIPProcessor, get_cosine_schedule_with_warm
 from huggingface_hub import HfApi
 import deepspeed.comm as dist
 import os
-
-# def preprocess_text_and_images(batch, processor, device):
-#     """
-#     Preprocess the batch data: images, positive captions, and negative captions.
-#     """
-#     image_paths, pos_captions, neg_captions = batch
-#     images = [Image.open(image_path).convert("RGB") for image_path in image_paths]
-
-#     inputs = processor(
-#         images=images,
-#         text=pos_captions + neg_captions,
-#         return_tensors="pt",
-#         padding=True
-#     ).to(device)
-
-#     pos_text_inputs = inputs["input_ids"][:len(pos_captions)]
-#     neg_text_inputs = inputs["input_ids"][len(pos_captions):]
-
-#     return inputs["pixel_values"], pos_text_inputs, neg_text_inputs
+from tqdm import tqdm
 
 def preprocess_text_and_images(batch, processor, device):
     """
@@ -46,7 +28,6 @@ def preprocess_text_and_images(batch, processor, device):
             unique_image_paths.append(image_path)
             unique_pos_captions.append(pos_captions[i])
             unique_neg_captions.append(neg_captions[i])
-
     # logging.info(f"Rank {dist.get_rank()} Unique batch size: {len(unique_image_paths)}")
 
     images = [Image.open(image_path).convert("RGB") for image_path in unique_image_paths]
@@ -62,10 +43,10 @@ def preprocess_text_and_images(batch, processor, device):
 
     return inputs["pixel_values"], pos_text_inputs, neg_text_inputs
 
-def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, optimizer, num_epochs, device,learning_rate):
+
+def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, optimizer, scheduler, num_epochs, device,learning_rate,dynamic_hard_negative=False,initial_weight=1.0,max_weight=50.0):
     """
     Train the CLIP model's vision encoder.
-
     """
     num_samples = len(data_loader.dataset)  
     batch_size = data_loader.batch_sampler.batch_size if hasattr(data_loader.batch_sampler, 'batch_size') else data_loader.batch_size
@@ -96,48 +77,63 @@ def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, opt
     best_loss = float('inf')
 
     for epoch in range(num_epochs):
+        if dynamic_hard_negative:
+            print('Apply dynamic_hard_negative=============')
+            # loss_fn.hard_negative_weight = initial_weight + (max_weight - initial_weight) * (epoch / (num_epochs - 1))
+            loss_fn.hard_negative_weight = initial_weight * (max_weight / initial_weight) ** (epoch / (num_epochs - 1))
+
         sampler.set_epoch(epoch)
 
         if dist.get_rank() == 0:
             logging.info(f"Epoch {epoch + 1}/{num_epochs} begins.")
-       
+            logging.info(f"Dynamic Hard Negative Weight: {loss_fn.hard_negative_weight}")  
         total_loss = 0.0
-    
-        for step, batch in enumerate(data_loader):
-            # logging.info(f"Rank {dist.get_rank()} is processing batch {step} with size {len(batch[0])}")
 
+        progress_bar = tqdm(
+            data_loader,
+            desc=f"Training Epoch {epoch + 1}/{num_epochs}",
+            disable=(dist.get_rank() != 0),  
+        )
+    
+        for step, batch in enumerate(progress_bar):
             # Preprocess batch data
             pixel_values, pos_text_inputs, neg_text_inputs = preprocess_text_and_images(batch, processor, device)
-            # logging.info("Finished preprocessing batch.")
             
             # Forward pass for image and text embeddings
             image_embeddings = model_engine.get_image_features(pixel_values)
-            # logging.info("Finished forward pass.")
             with torch.no_grad():
                 pos_text_embeddings = model_engine.get_text_features(pos_text_inputs)  
                 neg_text_embeddings = model_engine.get_text_features(neg_text_inputs)
 
             loss = loss_fn(image_embeddings, pos_text_embeddings, neg_text_embeddings, model_engine)
-            # logging.info("Computed loss.")
 
             # Backpropagation
             optimizer.zero_grad()
             model_engine.backward(loss)
             model_engine.step()
 
+            scheduler.step()
+
             total_loss += loss.item()
+
+            progress_bar.set_postfix({
+                "batch_loss": loss.item(),
+                "lr": optimizer.param_groups[0]["lr"],
+                "hard_negative_weight": loss_fn.hard_negative_weight,
+            })
+
             if dist.get_rank() == 0:
-                wandb.log({"batch_loss": loss.item(), "current_lr": optimizer.param_groups[0]["lr"]})
-
-            if dist.get_rank() == 0 and step % 100 == 0:
-                logging.info(f"Epoch {epoch + 1}, Step {step}/{num_batches}, Loss: {loss.item():.4f}")
-
+                wandb.log({
+                    "batch_loss": loss.item(),
+                    "current_lr": optimizer.param_groups[0]["lr"],
+                    "hard_negative_weight": loss_fn.hard_negative_weight, 
+                })
 
         avg_loss = total_loss / num_batches
         if dist.get_rank() == 0:
             logging.info(f"Epoch {epoch + 1} completed. Average Loss: {avg_loss}")
             wandb.log({"epoch_loss": avg_loss})
-        
+            
         # Save cache after each epoch
         epoch_cache_dir = f"./epoch_cache/epoch_{epoch + 1}"
         os.makedirs(epoch_cache_dir, exist_ok=True)
@@ -158,7 +154,6 @@ def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, opt
 
     # Push the best model to Hugging Face
     if dist.get_rank() == 0:
-
         best_model = CLIPModel.from_pretrained(best_model_dir)
         best_processor = CLIPProcessor.from_pretrained(best_model_dir)
 
@@ -170,11 +165,6 @@ def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, opt
 
 
 def push_to_hub(model, processor, repo_name):
-    """
-    Push the fine-tuned model and processor to the Hugging Face Hub.
-
-    """
-    # Push to Hugging Face Hub
     api = HfApi()
     user = api.whoami()["name"]
     repo_id = f"{user}/{repo_name}"
