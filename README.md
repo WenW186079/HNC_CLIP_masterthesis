@@ -63,10 +63,9 @@ wandb login
 
 ### Use deepspeed run the code
 
-- ⚠️[TODO]: USE ARG
 - ⚠️[TODO]: find best hyper parameters
 ```
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 deepspeed main_deepspeed.py
+CUDA_VISIBLE_DEVICES=5,6,7,8 deepspeed main.py --config_path config/config.yaml
 ```
 
 ## Evaluation
