@@ -44,7 +44,7 @@ def preprocess_text_and_images(batch, processor, device):
     return inputs["pixel_values"], pos_text_inputs, neg_text_inputs
 
 
-def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, optimizer, scheduler, num_epochs, device,learning_rate,dynamic_hard_negative=False,initial_weight=1.0,max_weight=50.0):
+def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, optimizer, scheduler, num_epochs, device,learning_rate,dynamic_hard_negative=False,initial_weight=1.0,max_weight=5.0):
     """
     Train the CLIP model's vision encoder.
     """
@@ -141,27 +141,27 @@ def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, opt
         processor.save_pretrained(epoch_cache_dir)
         logging.info(f"Model and processor saved to {epoch_cache_dir} after epoch {epoch + 1}.")
 
-        # Save the best model
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            best_model_dir = f"./best_model/"
-            os.makedirs(best_model_dir, exist_ok=True)
-            model_engine.save_pretrained(best_model_dir)
-            processor.save_pretrained(best_model_dir)
-            logging.info(f"Best model saved to {best_model_dir}.")
+        # # Save the best model
+        # if avg_loss < best_loss:
+        #     best_loss = avg_loss
+        #     best_model_dir = f"./best_model/"
+        #     os.makedirs(best_model_dir, exist_ok=True)
+        #     model_engine.save_pretrained(best_model_dir)
+        #     processor.save_pretrained(best_model_dir)
+        #     logging.info(f"Best model saved to {best_model_dir}.")
 
     wandb.finish()
 
-    # Push the best model to Hugging Face
-    if dist.get_rank() == 0:
-        best_model = CLIPModel.from_pretrained(best_model_dir)
-        best_processor = CLIPProcessor.from_pretrained(best_model_dir)
+    # # Push the best model to Hugging Face
+    # if dist.get_rank() == 0:
+    #     best_model = CLIPModel.from_pretrained(best_model_dir)
+    #     best_processor = CLIPProcessor.from_pretrained(best_model_dir)
 
-        push_to_hub(
-            model=best_model,
-            processor=best_processor,
-            repo_name='best_model_hnc'
-        )
+    #     push_to_hub(
+    #         model=best_model,
+    #         processor=best_processor,
+    #         repo_name='best_model_hnc'
+    #     )
 
 
 def push_to_hub(model, processor, repo_name):
