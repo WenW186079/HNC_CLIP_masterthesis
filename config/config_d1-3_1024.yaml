@@ -1,6 +1,6 @@
 dataset:
-  train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json"
-  image_folder_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images"
+  train_json_path: "./HNC/hnc_clean_strict_train.json"
+  image_folder_path: "./gqa_dataset/images/images"
 
 training:
   num_epochs: 5
