@@ -1,17 +1,8 @@
-#try: 
-# 5, 1-1.5, 1024
-## 5, 1-1.5, 2048
-# 5, 1.5, 1024
-# 5, 1.5, 2048
-# 5, 1-3, 1024
-# 5, 15, 1024 vs 5. 1-15.2014
 
 dataset:
   train_json_path: "./HNC/hnc_clean_strict_train.json"
   image_folder_path: "./gqa_dataset/images/images"
 
-  # train_json_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/HNC/hnc_clean_strict_train.json"
-  # image_folder_path: "/mount/studenten/team-lab-cl/data2024/w/data/thes/gqa_dataset/images/images"
 training:
   num_epochs: 5
   learning_rate: 1.0e-4
