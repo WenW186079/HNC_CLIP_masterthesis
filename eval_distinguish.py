@@ -7,6 +7,7 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 from torch.utils.data import Dataset, DataLoader
 import argparse
+import pandas as pd
 
 from load_data import LoadHNCPair, LoadCOCOPair
 
@@ -14,6 +15,9 @@ from load_data import LoadHNCPair, LoadCOCOPair
 def distinguish_clip(model, processor, dataset, device, batch_size=32):
     """
      The accuracy of the model in distinguishing positive from negative captions.
+     
+     Further: pos_similarities / (neg_similarities + 1e-6)  > 1.1
+
     """
     model.eval()
     total_samples = 0
@@ -26,37 +30,30 @@ def distinguish_clip(model, processor, dataset, device, batch_size=32):
             image_paths, pos_captions, neg_captions = zip(*batch)
 
             images = [Image.open(image_path).convert("RGB") for image_path in image_paths]
-            inputs = processor(images=images, return_tensors="pt", padding=True).to(device)
+            image_inputs = processor(images=images, return_tensors="pt", padding=True).to(device)
 
-            # Randomly shuffle between positive and negative captions
-            captions = []
-            labels = [] 
-            for pos, neg in zip(pos_captions, neg_captions):
-                if random.random() < 0.5:
-                    captions.append(pos)
-                    labels.append(1)
-                else:
-                    captions.append(neg)
-                    labels.append(0)
+            pos_text_inputs = processor(text=pos_captions, return_tensors="pt", padding=True).to(device)
+            neg_text_inputs = processor(text=neg_captions, return_tensors="pt", padding=True).to(device)
 
-            text_inputs = processor(text=captions, return_tensors="pt", padding=True).to(device)
-
-            image_features = model.get_image_features(**inputs)
-            text_features = model.get_text_features(**text_inputs)
+            image_features = model.get_image_features(**image_inputs)
+            pos_text_features = model.get_text_features(**pos_text_inputs)
+            neg_text_features = model.get_text_features(**neg_text_inputs)
 
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-            similarities = torch.matmul(image_features, text_features.T).diagonal()
+            pos_text_features = pos_text_features / pos_text_features.norm(dim=-1, keepdim=True)
+            neg_text_features = neg_text_features / neg_text_features.norm(dim=-1, keepdim=True)
 
-            # Convert similarities to predictions
-            predictions = (similarities > 0.5).long().tolist()
+            pos_similarities = (image_features * pos_text_features).sum(dim=-1)  
+            neg_similarities = (image_features * neg_text_features).sum(dim=-1) 
 
-            # Compute accuracy
-            correct_predictions += sum(p == l for p, l in zip(predictions, labels))
-            total_samples += len(labels)
+            similarity_ratio = pos_similarities / (neg_similarities + 1e-6)
+            correct_predictions += (similarity_ratio > 1.1).sum().item()
+            
+            # correct_predictions += (pos_similarities > neg_similarities).sum().item()
+            total_samples += len(image_paths)
 
     accuracy = correct_predictions / total_samples
-    return accuracy
+    return accuracy, total_samples
 
 
 def main():
@@ -70,9 +67,7 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CLIPModel.from_pretrained(args.model_name).to(device)
-    processor = CLIPProcessor.from_pretrained(args.model_name)
-
+    
     eval_annotations = json.load(open(args.dataset))
 
     if args.dataset_type == "hnc":
@@ -80,8 +75,25 @@ def main():
     elif args.dataset_type == "coco":
         eval_dataset = LoadCOCOPair(annotations=eval_annotations, image_folder=args.image_folder)
 
-    accuracy = distinguish_clip(model, processor, eval_dataset, device, batch_size=args.batch_size)
-    print(f"Data: {args.dataset_type}. Model: {args.model_name}. Accuracy: {accuracy * 100:.2f}%")
+    model_names = args.model_name.split(",")
+    results = []
+    for model_name in model_names:
+        print(f"\nEvaluating Model: {model_name}")
+        model = CLIPModel.from_pretrained(model_name).to(device)
+        processor = CLIPProcessor.from_pretrained(model_name)
+
+        accuracy, sample_numbers = distinguish_clip(model, processor, eval_dataset, device, batch_size=args.batch_size)
+        print(f"\nAcc: {accuracy}")
+        
+        results.append({
+            "Model Name": model_name,
+            "Sample Numbers": sample_numbers,
+            "Accuracy (%)": round(accuracy * 100, 2)
+        })
+    
+    df = pd.DataFrame(results)
+    print("\n=============Evaluation Results==============\n")
+    print(df.to_string(index=False))
 
 if __name__ == "__main__":
     main()
