@@ -37,7 +37,9 @@ mkdir Coco
 cd Coco
 
 wget http://images.cocodataset.org/zips/val2014.zip
+wget http://images.cocodataset.org/zips/test2014.zip
 unzip val2014.zip -d ./val2014
+unzip test2014.zip
 
 wget http://images.cocodataset.org/annotations/annotations_trainval2014.zip
 unzip annotations_trainval2014.zip
