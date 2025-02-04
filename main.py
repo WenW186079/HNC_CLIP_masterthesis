@@ -16,16 +16,16 @@ from load_data import LoadHNCPair, show_batches
 from loss_func import safe_exp, HNC_Loss
 from train_hnc import train_clip_model, preprocess_text_and_images, push_to_hub
 
-# best_model_dir = f"./epoch_cache/epoch_5"
+# best_model_dir = f"./epoch_cache/epoch_2"
 # best_model = CLIPModel.from_pretrained(best_model_dir)
 # best_processor = CLIPProcessor.from_pretrained(best_model_dir)
 
 # push_to_hub(
 #             model=best_model,
 #             processor=best_processor,
-#             repo_name='HNC_D1-15_epoch5'
+#             repo_name='HNC_10_2048_epoch2'
 #         )
-# print('pushed')
+# print('==================pushed====================')
 
 parser = argparse.ArgumentParser(description="Train CLIP with DeepSpeed")
 parser.add_argument("--config_path", type=str, default="config/config.yaml", help="Path to config.yaml")
