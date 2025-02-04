@@ -79,14 +79,14 @@ def train_clip_model(model_engine, processor, data_loader, sampler, loss_fn, opt
     for epoch in range(num_epochs):
         if dynamic_hard_negative:
             print('Apply dynamic_hard_negative=============')
-            # loss_fn.hard_negative_weight = initial_weight + (max_weight - initial_weight) * (epoch / (num_epochs - 1))
-            loss_fn.hard_negative_weight = initial_weight * (max_weight / initial_weight) ** (epoch / (num_epochs - 1))
+            loss_fn.hard_negative_weight = initial_weight + (max_weight - initial_weight) * (epoch / (num_epochs - 1))
+            # loss_fn.hard_negative_weight = initial_weight * (max_weight / initial_weight) ** (epoch / (num_epochs - 1))
 
         sampler.set_epoch(epoch)
 
         if dist.get_rank() == 0:
             logging.info(f"Epoch {epoch + 1}/{num_epochs} begins.")
-            logging.info(f"Dynamic Hard Negative Weight: {loss_fn.hard_negative_weight}")  
+            logging.info(f"Hard Negative Weight: {loss_fn.hard_negative_weight}")  
         total_loss = 0.0
 
         progress_bar = tqdm(
