@@ -18,7 +18,7 @@ class HNC_Loss(nn.Module):
             ref_model (torch.nn.Module): Reference model (e.g., pretrained CLIP) for L2 regularization.
         """
         super().__init__()
-        self.temperature = temperature
+        self.temperature = nn.Parameter(torch.tensor(temperature))
         self.hard_negative_weight = hard_negative_weight
         self.base_hard_negative_weight = hard_negative_weight
         self.l2_reg_weight = l2_reg_weight
@@ -46,9 +46,9 @@ class HNC_Loss(nn.Module):
         # print(f"neg_text_embeddings: {neg_text_embeddings}")
 
         # Normalize embeddings
-        image_embeddings = F.normalize(image_embeddings, dim=-1)
-        pos_text_embeddings = F.normalize(pos_text_embeddings, dim=-1)
-        neg_text_embeddings = F.normalize(neg_text_embeddings, dim=-1)
+        image_embeddings = F.normalize(image_embeddings, p=2, dim=-1)
+        pos_text_embeddings = F.normalize(pos_text_embeddings, p=2, dim=-1)
+        neg_text_embeddings = F.normalize(neg_text_embeddings, p=2, dim=-1)
         
         # print('========== After Normalize=========')
         # print(f"Shape of image_embeddings: {image_embeddings.shape}")  # [batch_size, embedding_dim]
@@ -87,6 +87,21 @@ class HNC_Loss(nn.Module):
             self.hard_negative_weight * safe_exp(diag_text_neg) +
             torch.sum(safe_exp(sim_text_to_image_neg), dim=1) - safe_exp(diag_text_neg) 
         )
+
+        # # Compute denominators for image-to-text loss
+        # denom_image_to_text = (
+        #     safe_exp(diag_image_pos) +
+        #     torch.sum(safe_exp(sim_image_to_pos), dim=1) - safe_exp(diag_image_pos) +  
+        #     self.hard_negative_weight * safe_exp(diag_image_neg) 
+        # )
+
+        # # Compute denominators for text-to-image loss
+        # denom_text_to_image = (
+        #     safe_exp(diag_text_pos) +
+        #     torch.sum(safe_exp(sim_text_to_image_pos), dim=1) - safe_exp(diag_text_pos) +  
+        #     self.hard_negative_weight * safe_exp(diag_text_neg) 
+        # )
+
 
         denom_image_to_text = denom_image_to_text + 1e-8
         denom_text_to_image = denom_text_to_image + 1e-8
