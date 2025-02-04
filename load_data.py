@@ -95,7 +95,6 @@ def show_batches(data_loader):
             break
 
 
-
 class LoadCOCOPair(Dataset):
     def __init__(self, annotations, image_folder):
         self.annotations = annotations
