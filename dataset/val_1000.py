@@ -39,3 +39,9 @@ with open('test_dataset.json', 'w') as f:
 
 print("Validation dataset with 1000 samples has been saved to 'val_dataset.json'.")
 print(f"Test dataset with {len(test_samples)} samples has been saved to 'test_dataset.json'.")
+
+
+#######
+# Total samples available: 18962
+# Validation dataset with 1000 samples has been saved to 'val_dataset.json'.
+# Test dataset with 17962 samples has been saved to 'test_dataset.json'.
