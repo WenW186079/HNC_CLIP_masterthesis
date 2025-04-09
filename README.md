@@ -74,6 +74,14 @@ CUDA_VISIBLE_DEVICES=5,6,7,8 deepspeed main.py --config_path config/config.yaml
 ```
 
 ## Evaluation
+Approach 1: Intrinsic metric
+
+```
+chmod +x run_test_data.sh
+
+./run_test_data.sh
+```
+
 Approach 1: Distinguishing posivite text from negative text
 - GQA dataset
 - Coco dataset
