@@ -21,12 +21,6 @@ class LoadCLIPDataset(Dataset):
     def __init__(self, annotations, image_folder, tokenizer, transform, is_test=False):
         """
         Initializes the dataset by creating (image_path, positive_caption, negative_caption) pairs.
-        
-        annotations: a dictionary where each key corresponds to an image and its associated caption info.
-        image_folder: folder containing the images.
-        tokenizer: tokenizer function from OpenCLIP.
-        transform: image transformation (preprocessing) to apply.
-        is_test: whether to use test logic (grouping by caption type) or training logic.
         """
         self.annotations = annotations
         self.image_folder = image_folder
@@ -68,7 +62,7 @@ class LoadCLIPDataset(Dataset):
                             pass
 
                         if len(pos_list) != len(neg_list):
-                            logger.warning(f"Unequal positives and negatives for {image_filename} in type '{cap_type}'. Skipping.")
+                            # logger.warning(f"Unequal positives and negatives for {image_filename} in type '{cap_type}'. Skipping.")
                             continue
 
                         for ((pos_cap_id, pos_data), (neg_cap_id, neg_data)) in zip(pos_list, neg_list):
@@ -78,7 +72,6 @@ class LoadCLIPDataset(Dataset):
                             self.hnc_count += 1
                             self.positive_count += 1
                 else:
-                    # Training logic: pair negatives with corresponding positive captions using cpt_p_id.
                     pos_caption_map = {
                         cap_id: cap_data["caption"]
                         for cap_id, cap_data in captions_dict.items() if cap_data["label"] == 1
@@ -89,11 +82,12 @@ class LoadCLIPDataset(Dataset):
                             neg_caption = cap_data["caption"]
                             cpt_p_id = cap_data.get("cpt_p_id")
                             if not cpt_p_id:
-                                logger.warning(f"Missing cpt_p_id for cap_id {cap_id} in {image_filename}. Skipping.")
+                                # logger.warning(f"Missing cpt_p_id for cap_id {cap_id} in {image_filename}. Skipping.")
                                 continue
                             cpt_p_id = str(cpt_p_id)
                             if cpt_p_id not in pos_caption_map:
-                                logger.warning(f"Invalid cpt_p_id {cpt_p_id} in image {image_filename}.")
+                                # logger.warning(f"Invalid cpt_p_id {cpt_p_id} in image {image_filename}.")
+                                continue
                             else:
                                 pos_caption = pos_caption_map[cpt_p_id]
                                 self.data_pairs.append((image_path, pos_caption, neg_caption))
@@ -139,10 +133,9 @@ def get_dataset(json_path, image_folder_path, tokenizer, transform, train_batch_
                      transform=transform,
                      is_test=is_test)
     
-    if dataset != 'train' and subset_size is not None:
-        if len(ds) > subset_size:
-            indices = random.sample(range(len(ds)), subset_size)
-            ds = Subset(ds, indices)
+    if subset_size is not None and len(ds) > subset_size:
+        indices = random.sample(range(len(ds)), subset_size)
+        ds = Subset(ds, indices)
     
     if dataset == 'train':
         sampler = DistributedSampler(
@@ -168,38 +161,38 @@ def get_dataset(json_path, image_folder_path, tokenizer, transform, train_batch_
     logging.info(f"Dataset '{dataset}' loaded with {len(ds)} samples.")
     return loader, ds
 
-def load_split(json_path, dataset_type, image_folder_path, tokenizer, transform, batch_size, subset_size=None):
+def load_split(json_path, dataset_type, image_folder_path, tokenizer, transform, batch_size, subset_size=None,loader_type="hnc"):
     if json_path is None:
         return None, None
-    return get_dataset(
-        json_path=json_path,
-        image_folder_path=image_folder_path,
-        tokenizer=tokenizer,
-        transform=transform,
-        train_batch_size=batch_size,
-        dataset=dataset_type,
-        subset_size=subset_size
-    )
 
-def deduplicate_batch(batch, device):
-    """
-    Removes duplicate images from a batch based on image_path and concatenates 
-    the corresponding positive and negative text tokens.
-    
-    Args:
-        batch (dict): Batch dictionary with keys "image_path", "pixel_values", "pos_text", "neg_text".
-        device: The device (e.g., "cuda") to which the tensors are moved.
-        
-    Returns:
-        images (torch.Tensor): A tensor of unique, preprocessed images.
-        text_inputs (torch.Tensor): A tensor obtained by concatenating positive and negative text tokens.
-    """
+    if loader_type.lower() == "coco":
+        print('=============COCO dataset=========')
+        return get_dataset_COCO(
+            json_path=json_path,
+            image_folder_path=image_folder_path,
+            tokenizer=tokenizer,
+            transform=transform,
+            batch_size=batch_size,
+            subset_size=subset_size
+        )
+    else:
+        print('=============HNC dataset=========')
+        return get_dataset(
+            json_path=json_path,
+            image_folder_path=image_folder_path,
+            tokenizer=tokenizer,
+            transform=transform,
+            train_batch_size=batch_size,
+            dataset=dataset_type,
+            subset_size=subset_size
+        )
+
+def deduplicate_batch(batch, device, mode=None):
     seen = set()
     unique_pixel_values = []
     unique_pos_texts = []
     unique_neg_texts = []
 
-    # Use the already preprocessed image tensors.
     for i, path in enumerate(batch["image_path"]):
         if path not in seen:
             seen.add(path)
@@ -210,34 +203,53 @@ def deduplicate_batch(batch, device):
     images = torch.stack(unique_pixel_values).to(device)
     pos_text_inputs = torch.stack(unique_pos_texts).to(device)
     neg_text_inputs = torch.stack(unique_neg_texts).to(device)
-    text_inputs = torch.cat([pos_text_inputs, neg_text_inputs], dim=0)
-
+    
+    if mode.lower() == 'standard':
+        text_inputs = pos_text_inputs
+    elif mode.lower() == 'hnc' or mode.lower() == 'dpo' :
+        text_inputs = torch.cat([pos_text_inputs, neg_text_inputs], dim=0)
+    else:
+        print('No such mode')
+    
     return images, text_inputs
 
 
+def split_train_val(dataset, val_size=1000, seed=42):
+    from torch.utils.data import random_split
+    if len(dataset) < val_size:
+        raise ValueError("Dataset size is smaller than the desired validation size.")
+    
+    train_size = len(dataset) - val_size
+    generator = torch.Generator().manual_seed(seed)
+    train_subset, val_subset = random_split(dataset, [train_size, val_size], generator=generator)
+    return train_subset, val_subset
 
 
 class LoadCOCOPair(Dataset):
-    def __init__(self, annotations, image_folder):
+    def __init__(self, annotations, image_folder, tokenizer, transform, is_test=False):
         self.annotations = annotations
         self.image_folder = image_folder
-        self.data_pairs = [] 
-        self.neg_count = 0
+        self.tokenizer = tokenizer
+        self.transform = transform
+        self.is_test = is_test
+        self.data_pairs = []
         self.positive_count = 0
+        self.neg_count = 0
+
+        missing_images_count = 0
 
         logger.info("Creating COCO image-POS-NEG pairs...")
-        missing_images_count = 0
 
         for data in annotations:
             image_filename = data.get("image")
             image_path = os.path.join(self.image_folder, image_filename)
             
             if os.path.exists(image_path):
-                pos_caption = data.get("text")  
-                neg_caption = data.get("neg_text")  
+                pos_caption = data.get("text")   
+                neg_caption = data.get("neg_text") 
                 
                 if pos_caption and neg_caption:
-                    self.data_pairs.append((image_path, pos_caption, neg_caption, "hnc"))
+                    self.data_pairs.append((image_path, pos_caption, neg_caption))
                     self.positive_count += 1
                     self.neg_count += 1
             else:
@@ -246,13 +258,50 @@ class LoadCOCOPair(Dataset):
 
         logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
         logger.info(f"Total Pos samples: {self.positive_count}")
-        logger.info(f"Total COCONEG samples: {self.neg_count}")
+        logger.info(f"Total COCO NEG samples: {self.neg_count}")
 
     def __len__(self):
         return len(self.data_pairs)
 
     def __getitem__(self, idx):
-        image_path, pos_caption, neg_caption, source = self.data_pairs[idx]
+        image_path, pos_caption, neg_caption = self.data_pairs[idx]
+        image = Image.open(image_path).convert("RGB")
+        if self.transform:
+            image = self.transform(image)
         
-        return image_path, pos_caption, neg_caption
+        pos_tokens = self.tokenizer([pos_caption])[0]
+        neg_tokens = self.tokenizer([neg_caption])[0]
+        
+        return {
+            "image_path": image_path,
+            "pixel_values": image,    # preprocessed image tensor
+            "pos_text": pos_tokens,   # tokenized positive caption
+            "neg_text": neg_tokens    # tokenized negative caption
+        }
 
+
+
+def get_dataset_COCO(json_path, image_folder_path, tokenizer, transform, batch_size, subset_size=None):
+    with open(json_path, 'r') as f:
+        annotations = json.load(f)
+    
+    ds = LoadCOCOPair(
+        annotations=annotations,
+        image_folder=image_folder_path,
+        tokenizer=tokenizer,
+        transform=transform,
+        is_test=True  
+    )
+    
+    if subset_size is not None and len(ds) > subset_size:
+        indices = random.sample(range(len(ds)), subset_size)
+        ds = Subset(ds, indices)
+    
+    loader = DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=False
+    )
+    
+    logging.info(f"COCO Dataset loaded with {len(ds)} samples.")
+    return loader, ds
