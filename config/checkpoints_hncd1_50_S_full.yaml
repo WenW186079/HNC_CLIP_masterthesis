@@ -20,8 +20,8 @@ training:
 
   
   lambda_ref: 0.001
-  hard_neg_weight: 1.0
-  dynamic_weight: False 
+  hard_neg_weight: 10.0
+  dynamic_weight: True 
   min_weight: 1
   max_weight: 50
   update_interval: 500
@@ -29,17 +29,17 @@ training:
 
   dpo_beta: 1.0
   
-  checkpoint_dir: './checkpoints_HNC1_S_full02'
+  checkpoint_dir: './checkpoints_hncd1_50_S_full_256'
 
 Val:
   val_size: 1000
-  val_step_frequency: 1370
+  val_step_frequency: 1000
   split: False
 
 
 deepspeed:
   config:
-    train_batch_size: 128
+    train_batch_size: 256
     train_micro_batch_size_per_gpu: 32
     gradient_accumulation_steps: 2
     gradient_checkpointing: false

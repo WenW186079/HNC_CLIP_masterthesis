@@ -8,7 +8,7 @@ dataset:
 
 training:
   model_name: "ViT-B/32"
-  num_epochs: 50
+  num_epochs: 100
   train_size: 1000000
   # train_size: 1000
 
@@ -16,7 +16,7 @@ training:
   weight_decay: 0.01
   num_warmup_steps: 100
   mode: 'HNC'  # Choose 'HNC' or 'standard' or 'dpo'
-  finetune_mode: 'full_encoder'  # Choose 'text_encoder' or 'vision_encoder' or 'full_encoder',"full_encoder_last"
+  finetune_mode: 'text_encoder'  # Choose 'text_encoder' or 'vision_encoder' or 'full_encoder',"full_encoder_last"
 
   
   lambda_ref: 0.001
@@ -29,7 +29,7 @@ training:
 
   dpo_beta: 1.0
   
-  checkpoint_dir: './checkpoints_HNC1_S_full02'
+  checkpoint_dir: './checkpoints_HNC1_S_text02'
 
 Val:
   val_size: 1000
