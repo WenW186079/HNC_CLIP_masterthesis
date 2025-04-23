@@ -8,7 +8,7 @@ Details seen in [proposal](Proposal.pdf)
 ## Set an environment
 ```
 python3.10 -m venv negcl_env
-source /mount/studenten/team-lab-cl/data2024/w/data/negcl_env/bin/activate
+source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/negcl_env/bin/activate 
 ```
 
 ## Install the packages
@@ -54,46 +54,31 @@ pip install git+https://github.com/openai/CLIP.git
 ```
 
 ## Use HNC tune CLIP model
-### Set cache path
+### Login wandb
 ```
-export TORCH_EXTENSIONS_DIR=/mount/studenten/team-lab-cl/data2024/w/data/torch_extensions/
-echo $TORCH_EXTENSIONS_DIR
-
-```
-### Login Huggingface and wandb
-```
-huggingface-cli login
 wandb login 
 ```
 
 ### Use deepspeed run the code
-
-- ⚠️[TODO]: find best hyper parameters
 ```
-CUDA_VISIBLE_DEVICES=5,6,7,8 deepspeed main.py --config_path config/config.yaml
+CUDA_VISIBLE_DEVICES=7,8 deepspeed mainCLIP.py --config_path config/config.yaml
 ```
 
 ## Evaluation
 Approach 1: Intrinsic metric
 
-```
-chmod +x run_test_data.sh
-
-./run_test_data.sh
-```
-
-Approach 1: Distinguishing posivite text from negative text
+Approach 2: Distinguishing posivite text from negative text
 - GQA dataset
 - Coco dataset
 
 ```
-chmod +x run_evaluation.sh
+chmod +x run_test_data.sh
 
-# Adjust the file path and run the script
-./run_evaluation.sh
+# Adjust the file path, mode...and run the script
+./run_test_data.sh
 ```
 
-Approach 2: Retrieval 
+Approach 3: Retrieval 
 - GQA dataset
 - Coco dataset
 ```
