@@ -77,15 +77,3 @@ chmod +x run_test_data.sh
 # Adjust the file path, mode...and run the script
 ./run_test_data.sh
 ```
-
-Approach 3: Retrieval 
-- GQA dataset
-- Coco dataset
-```
-#⚠️TODO
-```
-
-Approach 3: Downstream task
-```
-#⚠️TODO
-```
