@@ -1,0 +1,51 @@
+dataset:
+  # train_json_path: "./HNC/hnc_clean_strict_train.json"
+  train_json_path: "./HNC/hnc_train_sampled_1_percent.json"
+
+  val_json_path: "./HNC/hnc_val_sampled_1_percent.json"
+  test_json_path: "./HNC/hnc_clean_strict_test.json"
+  image_folder_path: "./gqa_dataset/images/images"
+
+training:
+  model_name: "ViT-B/32"
+  num_epochs: 50
+  train_size: 1000000
+  # train_size: 1000
+
+  learning_rate: 5.0e-6
+  weight_decay: 0.01
+  num_warmup_steps: 100
+  mode: 'HNC'  # Choose 'HNC' or 'standard' or 'dpo'
+  finetune_mode: 'full_encoder'  # Choose 'text_encoder' or 'vision_encoder' or 'full_encoder'
+
+  
+  lambda_ref: 0.001
+  hard_neg_weight: 10.0
+  dynamic_weight: False 
+  min_weight: 0
+  max_weight: 100
+  update_interval: 500
+  num_updates: 100
+
+  dpo_beta: 1.0
+  
+  checkpoint_dir: './checkpoints_hnc10_S_full'
+
+Val:
+  val_size: 1000
+  val_step_frequency: 1000
+  split: False
+
+
+deepspeed:
+  config:
+    train_batch_size: 128
+    train_micro_batch_size_per_gpu: 32
+    gradient_accumulation_steps: 2
+    gradient_checkpointing: false
+    gradient_clipping: 1.0
+    fp16:
+      enabled: false
+    zero_optimization:
+      stage: 2
+
