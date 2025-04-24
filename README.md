@@ -61,7 +61,7 @@ wandb login
 
 ### Use deepspeed run the code
 ```
-CUDA_VISIBLE_DEVICES=7,8 deepspeed mainCLIP.py --config_path config/config.yaml
+CUDA_VISIBLE_DEVICES=0,1 deepspeed mainCLIP.py --config_path config/config.yaml
 ```
 
 ## Evaluation
