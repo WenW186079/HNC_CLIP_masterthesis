@@ -1,6 +1,5 @@
 dataset:
   train_json_path: "./data/HNC/hnc_clean_strict_train.json"
-  # train_json_path: "./data/HNC/hnc_train_sampled_1_percent.json"
 
   val_json_path: "./data/HNC/hnc_val_sampled_1_percent.json"
   test_json_path: "./data/HNC/hnc_clean_strict_test.json"
@@ -10,8 +9,7 @@ training:
   model_name: "ViT-B/32"
   num_epochs: 10
   train_size: 1000000
-  # train_size: 1000
-
+  
   learning_rate: 5.0e-6
   weight_decay: 0.0001
   num_warmup_steps: 100
