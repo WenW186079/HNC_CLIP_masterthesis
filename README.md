@@ -7,8 +7,8 @@ Details seen in [proposal](Proposal.pdf)
 
 ## Set an environment
 ```
-python3.10 -m venv negcl_env
-source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/negcl_env/bin/activate 
+python3.10 -m venv thesis_env
+source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thesis_env/bin/activate 
 ```
 
 ## Install the packages
