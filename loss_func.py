@@ -15,20 +15,29 @@ class StandardCLIPLoss(nn.Module):
         return sim
 
     def forward(self, image_features, text_features, logit_scale, original_state_dict=None, model=None):
+        B, device = image_features.size(0), image_features.device
+        
         image_features = F.normalize(image_features, p=2, dim=1)
         text_features = F.normalize(text_features, p=2, dim=1)
+
+        # raw similarity matrix (no logit scale)
+        raw_sim = self._cosine_similarity(image_features, text_features, logit_scale=None)
+        positive_raw = raw_sim.diagonal()                
+        mask = ~torch.eye(B, dtype=torch.bool, device=device) 
+        negative_raw = raw_sim[mask].view(B, B-1)         
 
         logits_per_image = self._cosine_similarity(image_features, text_features, logit_scale)
         logits_per_text = self._cosine_similarity(text_features, image_features, logit_scale)
 
-        labels = torch.arange(image_features.size(0), device=image_features.device, dtype=torch.long)
+        labels = torch.arange(B, device=device, dtype=torch.long)
         loss_i2t = F.cross_entropy(logits_per_image, labels)
         loss_t2i = F.cross_entropy(logits_per_text, labels)
         total_loss = (loss_i2t + loss_t2i) / 2.0
 
-        positive_score = (image_features @ text_features.t()).diag()
+        positive_scaled = positive_raw * logit_scale
+        negative_scaled = negative_raw * logit_scale
 
-        return total_loss, loss_i2t, loss_t2i, positive_score, logit_scale
+        return total_loss, loss_i2t, loss_t2i, positive_raw, negative_raw, logit_scale, positive_scaled, negative_scaled
 
 class CLIPLoss(nn.Module):
     def __init__(
@@ -54,7 +63,6 @@ class CLIPLoss(nn.Module):
 
     
     def update_step(self, step):
-        """Update the current step for dynamic weight calculation."""
         self.current_step = step
     
     def _cosine_similarity(self, x, y, logit_scale=None):
@@ -110,7 +118,7 @@ class CLIPLoss(nn.Module):
 
         contrastive_loss = (loss_i2t + loss_t2i) / 2.0
         
-        # Compute regularization loss if original state is provided.
+        #  regularization loss 
         if original_state_dict is not None and model is not None:
             reg_loss = sum(
                 ((param - original_state_dict[name]) ** 2).sum()
@@ -121,11 +129,17 @@ class CLIPLoss(nn.Module):
             reg_loss = torch.tensor(0.0, device=device)
             total_loss = contrastive_loss
 
-        positive_score = pos_logits.diag()        
-        hard_negative_scores = neg_logits.diag()
-        margin = positive_score.mean() - hard_negative_scores.mean() 
+        raw_sim       = self._cosine_similarity(image_features, pos_text_features, logit_scale=None)  
+        positive_raw  = raw_sim.diag()                                                       
+        random_negative_raw  = raw_sim - raw_sim.diag()    
+        hnc_raw       = self._cosine_similarity(image_features, neg_text_features, logit_scale=None).diag() 
 
-        return total_loss, loss_i2t, loss_t2i, reg_loss, positive_score, hard_negative_scores, logit_scale, margin
+        positive_scaled = pos_logits.diag()  
+        random_negative_scaled =   pos_logits -  pos_logits.diag()    
+        hnc_scaled = neg_logits.diag()
+        margin = positive_scaled.mean() - hnc_scaled.mean() 
+
+        return total_loss, loss_i2t, loss_t2i, reg_loss, positive_raw, random_negative_raw, hnc_raw, positive_scaled, random_negative_scaled, hnc_scaled, logit_scale, margin
 
 class CombinedCLIPDPOLoss(nn.Module):
     def __init__(self, beta: float = 1.0, lambda_reg: float = 1e-4, alpha: float = 0.5):
