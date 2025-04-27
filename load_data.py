@@ -206,7 +206,7 @@ def deduplicate_batch(batch, device, mode=None):
     
     if mode.lower() == 'standard':
         text_inputs = pos_text_inputs
-    elif mode.lower() == 'hnc' or mode.lower() == 'dpo' :
+    elif mode.lower() == 'hnc_l2' or mode.lower() == 'hnc_kl'  or mode.lower() == 'dpo' :
         text_inputs = torch.cat([pos_text_inputs, neg_text_inputs], dim=0)
     else:
         print('No such mode')
