@@ -56,6 +56,7 @@ pip install -r requirements.txt
 ```
 
 ### Download HNC dataset
+Thanks to [HNC group(Esra Dönmez*, Pascal Tilli*, Hsiu-Yu Yang*, Ngoc Thang Vu and Carina Silberer)](https://github.com/DigitalPhonetics/hard-negative-captions)
 ```
 git clone https://huggingface.co/datasets/patilli/HNC
 ```
