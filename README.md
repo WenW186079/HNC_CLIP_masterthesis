@@ -7,9 +7,11 @@ Details seen in [proposal](Proposal.pdf)
 Here contains 6 ways of loss functions:
 
 - StandardCLIPLoss
+  
 The vanilla CLIP objective: it normalizes image and text embeddings, computes their cosine similarities (scaled by a learnable logit_scale), and applies symmetric cross‐entropy (image→text and text→image) to align matching pairs and repel all other pairs.
 
 - CLIPLossL2
+  
 Extends the standard CLIP loss by explicitly incorporating hard negative capture and an optional L₂ parameter‐regularization term. It also supports a dynamic schedule for increasing the hard‐negative weight over training steps.
   
 - CLIPLossKL
