@@ -27,7 +27,7 @@ def load_finetuned_clip_model(model_name, checkpoint_path, device='cuda', finetu
         try:
             checkpoint = torch.load(checkpoint_path, map_location=device)
         except Exception as e:
-            print(f"Error loading checkpoint from '{checkpoint_path}': {e}")
+            print(f"‼️⚠️Error loading checkpoint from '{checkpoint_path}': {e}")
             print("Please check that the checkpoint file is not corrupted and was saved properly.")
             raise e
 
@@ -38,17 +38,17 @@ def load_finetuned_clip_model(model_name, checkpoint_path, device='cuda', finetu
 
         load_result = model.load_state_dict(state_dict, strict=False)
         if load_result.missing_keys:
-            print(f"Warning: Missing keys when loading checkpoint from '{checkpoint_path}':\n", load_result.missing_keys)
+            print(f"‼️⚠️Warning: Missing keys when loading checkpoint from '{checkpoint_path}':\n", load_result.missing_keys)
         if load_result.unexpected_keys:
-            print(f"Warning: Unexpected keys when loading checkpoint from '{checkpoint_path}':\n", load_result.unexpected_keys)
+            print(f"‼️⚠️Warning: Unexpected keys when loading checkpoint from '{checkpoint_path}':\n", load_result.unexpected_keys)
         
         epoch = checkpoint.get("epoch", None) if isinstance(checkpoint, dict) else None
         saved_mode = checkpoint.get("finetune_mode", None) if isinstance(checkpoint, dict) else None
         if finetune_mode is not None and saved_mode is not None and saved_mode != finetune_mode:
-            print(f"Warning: Checkpoint was fine-tuned in mode '{saved_mode}', but '{finetune_mode}' was requested.")
-        print(f"Loaded fine-tuned model from '{checkpoint_path}' (Epoch: {epoch}).")
+            print(f"‼️⚠️Warning: Checkpoint was fine-tuned in mode '{saved_mode}', but '{finetune_mode}' was requested.")
+        print(f"✅Loaded fine-tuned model from '{checkpoint_path}' (Epoch: {epoch}).")
     else:
-        print(f"Checkpoint not found at '{checkpoint_path}'. Using base model.")
+        print(f"‼️⚠️Checkpoint not found at '{checkpoint_path}'. Using base model.")
 
     return model, preprocess, tokenizer
 
