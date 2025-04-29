@@ -12,7 +12,7 @@ import copy
 import random
 import clip
 
-from loss_func import CLIPLoss, StandardCLIPLoss, CombinedCLIPDPOLoss
+from loss_func import StandardCLIPLoss, CLIPLossL2, CLIPLossKL, DPOCLIPLoss, DPOContrastiveCLIPLoss, CombinedCLIPDPOLoss
 from load_data import deduplicate_batch
 from eval.eval_functions import evaluate_cosine_similarities,evaluate_cosine_similarities_and_plot,evaluate_cosine_similarities_random_negtive
 
@@ -139,7 +139,7 @@ def train_clip_model(
     num_epochs, 
     device,
     learning_rate,
-    mode='HNC', 
+    mode='hnc_kl', 
     lambda_ref = 0.01,
     hard_neg_weight = 1,
     dynamic_weight=True, 
@@ -152,7 +152,8 @@ def train_clip_model(
     val_loader=None,
     val_step_frequency=100,
     checkpoint_dir=None,
-    finetune_mode=None 
+    finetune_mode=None,
+    teacher_model=None,
     ):
     
     num_samples = len(data_loader.dataset)  
@@ -180,9 +181,9 @@ def train_clip_model(
     if dist.get_rank() == 0:
         check_trainable_parameters(model_engine)
 
-    if mode.lower() == 'hnc':
-        print('=======hnc mode=======')
-        loss_fn = CLIPLoss(
+    if mode.lower() == 'hnc_l2':
+        print('=======HNC L2 mode=======')
+        loss_fn = CLIPLossL2(
             hard_neg_weight=hard_neg_weight, 
             lambda_reg=lambda_ref,
             dynamic_weight=dynamic_weight, 
@@ -191,12 +192,30 @@ def train_clip_model(
             update_interval=update_interval,  
             num_updates=num_updates 
             )
+    elif mode.lower() == 'hnc_kl':
+        print('=======HNC KL mode=======')
+        loss_fn = CLIPLossKL(
+            hard_neg_weight=hard_neg_weight, 
+            lambda_reg=lambda_ref,
+            temperature=1.0, 
+            dynamic_weight=dynamic_weight, 
+            min_weight=min_weight, 
+            max_weight=max_weight, 
+            update_interval=update_interval,  
+            num_updates=num_updates 
+            )
     elif mode.lower() == 'standard':
-        print('=======standard mode=======')
+        print('=======Standard mode=======')
         loss_fn = StandardCLIPLoss()
-    elif mode.lower() == 'dpo':
-        print('======= DPO mode (Combined) =======')
-        loss_fn = CombinedCLIPDPOLoss(lambda_reg=lambda_ref, beta=dpo_beta, alpha=combined_alpha)
+    elif mode.lower() == 'dpo_kl':
+        print('======= DPO KL mode (Combined) =======')
+        loss_fn = DPOCLIPLoss(beta=dpo_beta)
+    elif mode.lower() == 'contrastive_dpo_kl':
+        print('======= DPO mode (Combined) KL =======')
+        loss_fn = DPOContrastiveCLIPLoss(beta=dpo_beta)
+    elif mode.lower() == 'contrastive_dpo_l2':
+        print('======= DPO mode (Combined) L2 =======')
+        loss_fn = CombinedCLIPDPOLoss(beta=dpo_beta)
     else:
         raise ValueError("mode must be either 'HNC', 'standard', or 'DPO'")
 
@@ -228,45 +247,123 @@ def train_clip_model(
                 text_features = model_engine.module.encode_text(text_inputs)
                 logit_scale = model_engine.module.logit_scale
 
-            # Compute loss using our custom loss function.
-            loss_outputs = loss_fn(
-                image_features, 
-                text_features, 
-                logit_scale, 
-                original_state_dict=original_state_dict, 
-                model=model_engine
-            )
-
-            if mode.lower() == 'dpo':
+            if mode.lower() == 'dpo_kl':
+                dpo_loss, positive_scaled, random_negative_scaled, hnc_scaled, logit_scale, margin = loss_fn(
+                    image_features,
+                    text_features,
+                    logit_scale,
+                    teacher_model=teacher_model,
+                    image_inputs=images,
+                    text_inputs=text_inputs
+                )
+                loss_dict = {
+                    "loss_total": dpo_loss,
+                    "positive_scaled": positive_scaled.mean(),
+                    "random_negative_scaled": random_negative_scaled.mean(),
+                    "hnc_scaled": hnc_scaled.mean(),
+                    "logit_scale": logit_scale,
+                    "margin_in_train": margin,
+                }
+            elif mode.lower() == 'contrastive_dpo_kl':
+                total_loss, contrastive_loss, dpo_loss, positive_scaled, random_negative_scaled, hnc_scaled, logit_scale, margin = loss_fn(
+                    image_features,
+                    text_features,
+                    logit_scale,
+                    teacher_model=teacher_model,
+                    image_inputs=images,
+                    text_inputs=text_inputs
+                )
+                loss_dict = {
+                    "loss_total": total_loss,
+                    "loss_dpo": dpo_loss,
+                    "loss_contrastive": contrastive_loss,
+                    "positive_scaled": positive_scaled.mean(),
+                    "random_negative_scaled": random_negative_scaled.mean(),
+                    "hnc_scaled": hnc_scaled.mean(),
+                    "logit_scale": logit_scale,
+                    "margin_in_train": margin,
+                }
+            elif mode.lower() == 'contrastive_dpo_l2':
                 total_loss, contrastive_loss, dpo_loss, reg_loss = loss_outputs
                 loss_dict = {
                     "loss_total": total_loss,
-                    "contrastive_loss": contrastive_loss,
-                    "dpo_loss": dpo_loss,
+                    "loss_dpo": dpo_loss,
+                    "loss_contrastive": contrastive_loss,
                     "reg_loss": reg_loss,
                 }
             elif mode.lower() == 'standard':
-                total_loss, loss_i2t, loss_t2i, positive_score, logit_scale = loss_outputs
+                total_loss, loss_i2t, loss_t2i, positive_raw, negative_raw, logit_scale, positive_scaled, negative_scaled = loss_fn(
+                    image_features, 
+                    text_features, 
+                    logit_scale, 
+                    original_state_dict=original_state_dict, 
+                    model=model_engine
+                )
                 loss_dict = {
                     "loss_total": total_loss,
                     "loss_i2t": loss_i2t,
                     "loss_t2i": loss_t2i,
                     "loss_contrastive": total_loss,
+                    'positive_raw':positive_raw.mean(),
+                    'negative_raw':negative_raw.mean(),
                     "logit_scale": logit_scale,
-                    "positive_score": positive_score.mean(),
+                    "positive_scaled": positive_scaled.mean(),
+                    'negative_scaled':negative_scaled.mean(),
                 }
-            elif mode.lower() == 'hnc':
-                total_loss, loss_i2t, loss_t2i, reg_loss, positive_score, hard_negative_scores, logit_scale , margin = loss_outputs
+            elif mode.lower() == 'hnc_l2':
+                total_loss, contrastive_loss, loss_i2t, loss_t2i, reg_loss, positive_raw, random_negative_raw, hnc_raw, positive_scaled, random_negative_scaled, hnc_scaled, logit_scale, margin, weight = loss_fn(
+                    image_features, 
+                    text_features, 
+                    logit_scale, 
+                    original_state_dict=original_state_dict, 
+                    model=model_engine
+                )
                 loss_dict = {
                     "loss_total": total_loss,
                     "loss_i2t": loss_i2t,
                     "loss_t2i": loss_t2i,
-                    "loss_contrastive": (loss_i2t + loss_t2i) / 2.0,
+                    "loss_contrastive": contrastive_loss,
                     "reg_loss": reg_loss,
                     "logit_scale": logit_scale,
-                    "positive_score": positive_score.mean(),
-                    "hard_negative_scores": hard_negative_scores.mean(),
+
+                    "positive_raw": positive_raw.mean(),
+                    "random_negative_raw": random_negative_raw.mean(),
+                    "hnc_raw": hnc_raw.mean(),
+
+                    "positive_scaled": positive_scaled.mean(),
+                    "random_negative_scaled": random_negative_scaled.mean(),
+                    "hnc_scaled": hnc_scaled.mean(),
+
                     "margin_in_train": margin,
+                    "hnc_weight":weight,
+                }
+            elif mode.lower() == 'hnc_kl':
+                total_loss, contrastive_loss, loss_i2t, loss_t2i, kl_loss, positive_raw, random_negative_raw, hnc_raw, positive_scaled, random_negative_scaled, hnc_scaled, logit_scale, margin, weight = loss_fn(
+                    image_features,
+                    text_features,
+                    logit_scale,
+                    teacher_model=teacher_model,
+                    image_inputs=images,
+                    text_inputs=text_inputs
+                )
+                loss_dict = {
+                    "loss_total": total_loss,
+                    "loss_i2t": loss_i2t,
+                    "loss_t2i": loss_t2i,
+                    "loss_contrastive": contrastive_loss,
+                    "kl_loss": kl_loss,
+                    "logit_scale": logit_scale,
+
+                    "positive_raw": positive_raw.mean(),
+                    "random_negative_raw": random_negative_raw.mean(),
+                    "hnc_raw": hnc_raw.mean(),
+
+                    "positive_scaled": positive_scaled.mean(),
+                    "random_negative_scaled": random_negative_scaled.mean(),
+                    "hnc_scaled": hnc_scaled.mean(),
+
+                    "margin_in_train": margin,
+                    "hnc_weight":weight,
                 }
             else:
                 print('There is no such mode')
@@ -298,11 +395,31 @@ def train_clip_model(
                 current_weight = 0 
 
             if dist.get_rank() == 0 and global_step % 10 == 0:
-                if mode.lower() == 'dpo':
+                if mode.lower() == 'dpo_kl':
                     log_dict = {
                         "loss_total": loss_dict["loss_total"].item(),
-                        "contrastive_loss": loss_dict["contrastive_loss"].item(),
-                        "dpo_loss": loss_dict["dpo_loss"].item(),
+                        "logit_scale": loss_dict["logit_scale"].item() if isinstance(loss_dict["logit_scale"], torch.Tensor) else loss_dict["logit_scale"],
+                        "positive_scaled": loss_dict["positive_scaled"].item() if isinstance(loss_dict["positive_scaled"], torch.Tensor) else loss_dict["positive_scaled"],
+                        "random_negative_scaled": loss_dict["random_negative_scaled"].mean().item() if isinstance(loss_dict["random_negative_scaled"], torch.Tensor) else loss_dict["random_negative_scaled"],
+                        "hnc_scaled": loss_dict["hnc_scaled"].item() if isinstance(loss_dict["hnc_scaled"], torch.Tensor) else loss_dict["hnc_scaled"],
+                        "margin_in_train": loss_dict["margin_in_train"].item() if isinstance(loss_dict["margin_in_train"], torch.Tensor) else loss_dict["margin_in_train"],
+                    }
+                elif mode.lower() == 'contrastive_dpo_kl':
+                    log_dict = {
+                        "loss_total": loss_dict["loss_total"].item(),
+                        "loss_dpo": loss_dict["loss_dpo"].item(),
+                        "loss_contrastive": loss_dict["loss_contrastive"].item(),
+                        "logit_scale": loss_dict["logit_scale"].item() if isinstance(loss_dict["logit_scale"], torch.Tensor) else loss_dict["logit_scale"],
+                        "positive_scaled": loss_dict["positive_scaled"].item() if isinstance(loss_dict["positive_scaled"], torch.Tensor) else loss_dict["positive_scaled"],
+                        "random_negative_scaled": loss_dict["random_negative_scaled"].mean().item() if isinstance(loss_dict["random_negative_scaled"], torch.Tensor) else loss_dict["random_negative_scaled"],
+                        "hnc_scaled": loss_dict["hnc_scaled"].item() if isinstance(loss_dict["hnc_scaled"], torch.Tensor) else loss_dict["hnc_scaled"],
+                        "margin_in_train": loss_dict["margin_in_train"].item() if isinstance(loss_dict["margin_in_train"], torch.Tensor) else loss_dict["margin_in_train"],
+                    }
+                elif mode.lower() == 'contrastive_dpo_l2':
+                    log_dict = {
+                        "loss_total": loss_dict["loss_total"].item(),
+                        "loss_dpo": loss_dict["loss_dpo"].item(),
+                        "loss_contrastive": loss_dict["loss_contrastive"].item(),
                         "reg_loss": loss_dict["reg_loss"].item(),
                     }
                 elif mode.lower() == 'standard':
@@ -311,10 +428,15 @@ def train_clip_model(
                         "loss_i2t": loss_dict["loss_i2t"].item(),
                         "loss_t2i": loss_dict["loss_t2i"].item(),
                         "loss_contrastive": loss_dict["loss_contrastive"].item(),
+
+                        "positive_raw":     loss_dict["positive_raw"].item(),
+                        "negative_raw":     loss_dict["negative_raw"].item(),
+                        "positive_scaled":  loss_dict["positive_scaled"].item(),
+                        "negative_scaled":  loss_dict["negative_scaled"].item(),
+
                         "logit_scale": loss_dict["logit_scale"].item() if isinstance(loss_dict["logit_scale"], torch.Tensor) else loss_dict["logit_scale"],
-                        "positive_score": loss_dict["positive_score"].item() if isinstance(loss_dict["positive_score"], torch.Tensor) else loss_dict["positive_score"],
                     }
-                elif mode.lower() == 'hnc':
+                elif mode.lower() == 'hnc_l2':
                     log_dict = {
                         "loss_total": loss_dict["loss_total"].item(),
                         "loss_i2t": loss_dict["loss_i2t"].item(),
@@ -322,8 +444,32 @@ def train_clip_model(
                         "loss_contrastive": loss_dict["loss_contrastive"].item(),
                         "reg_loss": loss_dict["reg_loss"].item(),
                         "logit_scale": loss_dict["logit_scale"].item() if isinstance(loss_dict["logit_scale"], torch.Tensor) else loss_dict["logit_scale"],
-                        "positive_score": loss_dict["positive_score"].item() if isinstance(loss_dict["positive_score"], torch.Tensor) else loss_dict["positive_score"],
-                        "hard_negative_scores": loss_dict["hard_negative_scores"].item() if isinstance(loss_dict["hard_negative_scores"], torch.Tensor) else loss_dict["hard_negative_scores"],
+                        
+                        "positive_raw": loss_dict["positive_raw"].item() if isinstance(loss_dict["positive_raw"], torch.Tensor) else loss_dict["positive_raw"],
+                        "random_negative_raw": loss_dict["random_negative_raw"].item() if isinstance(loss_dict["random_negative_raw"], torch.Tensor) else loss_dict["random_negative_raw"],
+                        "hnc_raw": loss_dict["hnc_raw"].item() if isinstance(loss_dict["hnc_raw"], torch.Tensor) else loss_dict["hnc_raw"],
+
+                        "positive_scaled": loss_dict["positive_scaled"].item() if isinstance(loss_dict["positive_scaled"], torch.Tensor) else loss_dict["positive_scaled"],
+                        "random_negative_scaled": loss_dict["random_negative_scaled"].mean().item() if isinstance(loss_dict["random_negative_scaled"], torch.Tensor) else loss_dict["random_negative_scaled"],
+                        "hnc_scaled": loss_dict["hnc_scaled"].item() if isinstance(loss_dict["hnc_scaled"], torch.Tensor) else loss_dict["hnc_scaled"],
+                        "margin_in_train": loss_dict["margin_in_train"].item() if isinstance(loss_dict["margin_in_train"], torch.Tensor) else loss_dict["margin_in_train"],
+                    }
+                elif mode.lower() == 'hnc_kl':
+                    log_dict = {
+                        "loss_total": loss_dict["loss_total"].item(),
+                        "loss_i2t": loss_dict["loss_i2t"].item(),
+                        "loss_t2i": loss_dict["loss_t2i"].item(),
+                        "loss_contrastive": loss_dict["loss_contrastive"].item(),
+                        "kl_loss": loss_dict["kl_loss"].item(),
+                        "logit_scale": loss_dict["logit_scale"].item() if isinstance(loss_dict["logit_scale"], torch.Tensor) else loss_dict["logit_scale"],
+                        
+                        "positive_raw": loss_dict["positive_raw"].item() if isinstance(loss_dict["positive_raw"], torch.Tensor) else loss_dict["positive_raw"],
+                        "random_negative_raw": loss_dict["random_negative_raw"].item() if isinstance(loss_dict["random_negative_raw"], torch.Tensor) else loss_dict["random_negative_raw"],
+                        "hnc_raw": loss_dict["hnc_raw"].item() if isinstance(loss_dict["hnc_raw"], torch.Tensor) else loss_dict["hnc_raw"],
+
+                        "positive_scaled": loss_dict["positive_scaled"].item() if isinstance(loss_dict["positive_scaled"], torch.Tensor) else loss_dict["positive_scaled"],
+                        "random_negative_scaled": loss_dict["random_negative_scaled"].mean().item() if isinstance(loss_dict["random_negative_scaled"], torch.Tensor) else loss_dict["random_negative_scaled"],
+                        "hnc_scaled": loss_dict["hnc_scaled"].item() if isinstance(loss_dict["hnc_scaled"], torch.Tensor) else loss_dict["hnc_scaled"],
                         "margin_in_train": loss_dict["margin_in_train"].item() if isinstance(loss_dict["margin_in_train"], torch.Tensor) else loss_dict["margin_in_train"],
                     }
                 else:
@@ -337,29 +483,19 @@ def train_clip_model(
                         
             global_step += 1
  
-            # ---- Begin Validation Step ----
-            if val_loader is not None and (global_step % val_step_frequency == 0):
-                model_to_eval = model_engine.module if hasattr(model_engine, "module") else model_engine
-                # avg_pos, avg_neg, margin = evaluate_cosine_similarities(model_to_eval, val_loader, device)
-                # if dist.get_rank() == 0:
-                #     # print(f"Number of samples in val_dataset: {len(val_dataset)}")
-                #     # print(f"Number of samples in val_subset: {len(val_subset)}")
-                #     wandb.log({
-                #         "val/avg_pos": avg_pos,
-                #         "val/avg_neg": avg_neg,
-                #         "val/margin": margin,
-                #         "global_step": global_step,
-                #     })
-                avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(model_to_eval, val_loader, device)
-                if dist.get_rank() == 0:
-                    wandb.log({
-                        "val/avg_pos": avg_pos,
-                        "val/avg_neg": avg_neg,
-                        "val/random_neg": avg_rand_neg,
-                        "val/margin": margin,
-                        "global_step": global_step,
-                    })
-            # ---- End Validation Step ----
+            # # ---- Begin Validation Step ----
+            # if val_loader is not None and (global_step % val_step_frequency == 0):
+            #     model_to_eval = model_engine.module if hasattr(model_engine, "module") else model_engine
+            #     avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(model_to_eval, val_loader, device)
+            #     if dist.get_rank() == 0:
+            #         wandb.log({
+            #             "val/avg_pos": avg_pos,
+            #             "val/avg_neg": avg_neg,
+            #             "val/random_neg": avg_rand_neg,
+            #             "val/margin": margin,
+            #             "global_step": global_step,
+            #         })
+            # # ---- End Validation Step ----
             
                      
         avg_loss = total_loss / num_batches
@@ -367,13 +503,12 @@ def train_clip_model(
             logging.info(f"Epoch {epoch + 1} completed. Average Loss: {avg_loss}")
             wandb.log({"epoch_loss": avg_loss, "epoch": epoch + 1})
         
-        # if checkpoint_dir is not None and dist.get_rank() == 0 and ((epoch + 1) % 5 == 0):
         if checkpoint_dir is not None and dist.get_rank() == 0 :
             save_checkpoint(model_engine, optimizer, epoch + 1, checkpoint_dir, finetune_mode, filename=None)
         
     wandb.finish()
 
-    # After the training loop ends.
-    if dist.get_rank() == 0 and checkpoint_dir is not None:
-        filename = f"{finetune_mode}_final_model.pt"
-        save_checkpoint(model_engine, optimizer, num_epochs, checkpoint_dir, finetune_mode, filename=filename)
+    # # After the training loop ends.
+    # if dist.get_rank() == 0 and checkpoint_dir is not None:
+    #     filename = f"{finetune_mode}_final_model.pt"
+    #     save_checkpoint(model_engine, optimizer, num_epochs, checkpoint_dir, finetune_mode, filename=filename)
