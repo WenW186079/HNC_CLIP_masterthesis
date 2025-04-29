@@ -119,3 +119,8 @@ chmod +x run_test_data.sh
 # Adjust the file path, mode...and run the script
 ./run_test_data.sh
 ```
+
+# Result and analysis
+Details can be found [here](result_and_analysis)
+
+
