@@ -31,13 +31,11 @@ def load_finetuned_clip_model(model_name, checkpoint_path, device='cuda', finetu
             print("Please check that the checkpoint file is not corrupted and was saved properly.")
             raise e
 
-        # Expecting the checkpoint to be a dict with "state_dict" saved.
         if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
         else:
             state_dict = checkpoint
 
-        # Use strict=False so that mismatches (due to, e.g., partial fine-tuning) are tolerated.
         load_result = model.load_state_dict(state_dict, strict=False)
         if load_result.missing_keys:
             print(f"Warning: Missing keys when loading checkpoint from '{checkpoint_path}':\n", load_result.missing_keys)
@@ -78,7 +76,6 @@ def print_comparison_table(results):
             ]
             print(" | ".join(row))
     else:
-        #assume standard evaluation with cosine or plot or random.
         headers = ["Checkpoint", "Eval_Method", "Avg_Pos", "Avg_Neg", "Margin"]
         if results and "Avg_Rand_Neg" in results[0]:
             headers.append("Avg_Rand_Neg")
