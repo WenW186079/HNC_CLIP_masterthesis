@@ -6,14 +6,14 @@ dataset:
 
 training:
   model_name: "ViT-B/32"
-  num_epochs: 100
+  num_epochs: 50
   train_size: 100000
 
   learning_rate: 5.0e-6
   weight_decay: 0.0001
   num_warmup_steps: 100
   mode: 'hnc_kl'  # Choose 'hnc_l2', 'hnc_kl', 'standard', 'dpo_kl', 'contrastive_dpo_kl', 'contrastive_dpo_l2'
-  finetune_mode: 'full_encoder'  # Choose 'text_encoder' or 'vision_encoder' or 'full_encoder',"full_encoder_last"
+  finetune_mode: 'full_encoder'  # Choose 'text_encoder' or 'vision_encoder' or 'full_encoder',"last_encoder"
 
   lambda_ref: 0.001
   hard_neg_weight: 1.0
