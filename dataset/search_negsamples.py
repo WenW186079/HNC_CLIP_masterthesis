@@ -31,8 +31,8 @@ def search_hnc_negatives(json_file_path, target_image_id, target_caption):
         else:
             print(f"No HNC negatives found for '{target_caption}'.")
 
-# Parameters
-image_id = "2415537"  # Example image ID
+# Example
+image_id = "2415537" 
 positive_caption = "The trees are to the left of the flag."
 
 search_hnc_negatives(json_file_path, image_id, positive_caption)
