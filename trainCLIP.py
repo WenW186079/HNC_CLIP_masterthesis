@@ -18,17 +18,25 @@ from eval.eval_functions import evaluate_cosine_similarities,evaluate_cosine_sim
 
 def set_trainable_parameters(model, finetune_mode):
     if finetune_mode == "text_encoder":
-        # Freeze all visual encoder parameters.
+        # Freeze visual encoder + vision projection
         for param in model.visual.parameters():
             param.requires_grad = False
+        if hasattr(model, 'visual_projection'):
+            model.visual_projection.requires_grad = False
+
+        # Unfreeze text encoder
         for param in model.transformer.parameters():
             param.requires_grad = True
+
+        # Unfreeze text projection
         if hasattr(model, 'text_projection'):
             if isinstance(model.text_projection, torch.nn.Parameter):
                 model.text_projection.requires_grad = True
             else:
                 for param in model.text_projection.parameters():
                     param.requires_grad = True
+
+        # Unfreeze token embedding
         if hasattr(model, 'token_embedding'):
             if isinstance(model.token_embedding, torch.nn.Parameter):
                 model.token_embedding.requires_grad = True
@@ -36,8 +44,9 @@ def set_trainable_parameters(model, finetune_mode):
                 for param in model.token_embedding.parameters():
                     param.requires_grad = True
 
+
     elif finetune_mode == "vision_encoder":
-        # Freeze the text encoder.
+        # Freeze text encoder + text projection + token embedding
         for param in model.transformer.parameters():
             param.requires_grad = False
         if hasattr(model, 'text_projection'):
@@ -46,64 +55,42 @@ def set_trainable_parameters(model, finetune_mode):
             else:
                 for param in model.text_projection.parameters():
                     param.requires_grad = False
-
         if hasattr(model, 'token_embedding'):
             if isinstance(model.token_embedding, torch.nn.Parameter):
                 model.token_embedding.requires_grad = False
             else:
                 for param in model.token_embedding.parameters():
                     param.requires_grad = False
-        # Ensure vision parameters are trainable.
+
+        # Unfreeze visual encoder + vision projection
         for param in model.visual.parameters():
             param.requires_grad = True
+        if hasattr(model, 'visual_projection'):
+            model.visual_projection.requires_grad = True
+
 
     elif finetune_mode == "full_encoder":
-        # Train all parameters.
+        # Unfreeze all parameters
         for param in model.parameters():
             param.requires_grad = True
 
-    elif finetune_mode == "full_encoder_last":
-        # First, freeze all parameters.
+    elif finetune_mode == "last_encoder":
+        # Freeze everything first
         for param in model.parameters():
             param.requires_grad = False
 
-        # Unfreeze only the last block of the vision encoder.
-        if hasattr(model, 'visual') and hasattr(model.visual, 'transformer'):
-            if hasattr(model.visual.transformer, 'resblocks'):
-                # Unfreeze the parameters in the last residual block.
-                for param in model.visual.transformer.resblocks[-1].parameters():
-                    param.requires_grad = True
-            else:
-                # If the expected attribute doesn't exist, unfreeze all visual parameters.
-                for param in model.visual.parameters():
-                    param.requires_grad = True
+        # Unfreeze last block of the visual encoder
+        if hasattr(model.visual, 'transformer') and hasattr(model.visual.transformer, 'resblocks'):
+            for param in model.visual.transformer.resblocks[-1].parameters():
+                param.requires_grad = True
 
-        # Unfreeze only the last block of the text encoder.
-        if hasattr(model, 'transformer') and hasattr(model.transformer, 'resblocks'):
+        # Unfreeze last block of the text encoder
+        if hasattr(model.transformer, 'resblocks'):
             for param in model.transformer.resblocks[-1].parameters():
                 param.requires_grad = True
-        else:
-            # Fallback: unfreeze all text encoder parameters.
-            for param in model.transformer.parameters():
-                param.requires_grad = True
-
-        # Unfreeze text_projection and token_embedding as well.
-        if hasattr(model, 'text_projection'):
-            if isinstance(model.text_projection, torch.nn.Parameter):
-                model.text_projection.requires_grad = True
-            else:
-                for param in model.text_projection.parameters():
-                    param.requires_grad = True
-        if hasattr(model, 'token_embedding'):
-            if isinstance(model.token_embedding, torch.nn.Parameter):
-                model.token_embedding.requires_grad = True
-            else:
-                for param in model.token_embedding.parameters():
-                    param.requires_grad = True
-
     else:
-        print(f"Unknown finetune_mode: {finetune_mode}. No parameters were frozen.")
-    
+        print(f"Unknown finetune_mode: {finetune_mode}. No parameters were changed.")
+
 def check_trainable_parameters(model):
     print("=== Parameter training flags ===")
     for name, param in model.named_parameters():
@@ -508,6 +495,7 @@ def train_clip_model(
         
     wandb.finish()
 
+    # # After the training loop ends.
     # if dist.get_rank() == 0 and checkpoint_dir is not None:
     #     filename = f"{finetune_mode}_final_model.pt"
     #     save_checkpoint(model_engine, optimizer, num_epochs, checkpoint_dir, finetune_mode, filename=filename)
