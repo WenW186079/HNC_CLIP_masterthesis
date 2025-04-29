@@ -123,4 +123,5 @@ chmod +x run_test_data.sh
 # Result and analysis
 Details can be found [here](result_and_analysis)
 
-
+# Models
+All models can be found [here](https://drive.google.com/drive/folders/11Pxr9IA4l4EegGzgcvBzVNPWCxFmqsGl?usp=drive_link) with relative [config](config) files
