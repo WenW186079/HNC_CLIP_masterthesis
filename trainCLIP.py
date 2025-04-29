@@ -508,7 +508,6 @@ def train_clip_model(
         
     wandb.finish()
 
-    # # After the training loop ends.
     # if dist.get_rank() == 0 and checkpoint_dir is not None:
     #     filename = f"{finetune_mode}_final_model.pt"
     #     save_checkpoint(model_engine, optimizer, num_epochs, checkpoint_dir, finetune_mode, filename=filename)
