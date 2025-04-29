@@ -75,15 +75,8 @@ mkdir Coco
 cd Coco
 
 wget http://images.cocodataset.org/zips/val2014.zip
-wget http://images.cocodataset.org/zips/test2014.zip
 unzip val2014.zip -d ./val2014
-unzip test2014.zip -d ./test2014
 
-wget https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test.json
-wget https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val.json
-
-wget http://images.cocodataset.org/annotations/annotations_trainval2014.zip
-unzip annotations_trainval2014.zip
 ```
 
 ### Download CLIP model using git
