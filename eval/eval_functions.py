@@ -161,39 +161,31 @@ def evaluate_cosine_similarities_random_negtive(model, eval_loader, device):
                 pos_features = model.encode_text(pos_text)
                 neg_features = model.encode_text(neg_text)
             
-            # Normalize all embeddings.
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
             pos_features   = pos_features   / pos_features.norm(dim=-1, keepdim=True)
             neg_features   = neg_features   / neg_features.norm(dim=-1, keepdim=True)
             
-            # Compute aligned cosine similarities.
             pos_cos_sim = F.cosine_similarity(image_features, pos_features, dim=-1)
             neg_cos_sim = F.cosine_similarity(image_features, neg_features, dim=-1)
             
             pos_similarities.extend(pos_cos_sim.cpu().tolist())
             neg_similarities.extend(neg_cos_sim.cpu().tolist())
             
-            # Collect embeddings.
             image_emb_list.append(image_features.cpu())
             pos_emb_list.append(pos_features.cpu())
             
-            # If available, collect image paths for deduplication.
             if "image_path" in batch:
                 image_path_list.extend(batch["image_path"])
     
-    # Compute the aligned averages.
     avg_pos = sum(pos_similarities) / len(pos_similarities)
     avg_neg = sum(neg_similarities) / len(neg_similarities)
     margin  = avg_pos - avg_neg
     
-    # Concatenate the embeddings.
-    images = torch.cat(image_emb_list, dim=0).float()    # shape: [N, D]
-    positives = torch.cat(pos_emb_list, dim=0).float()      # shape: [N, D]
+    images = torch.cat(image_emb_list, dim=0).float()   
+    positives = torch.cat(pos_emb_list, dim=0).float()     
     N = images.size(0)
     
-    # If image paths are provided, deduplicate images.
     if image_path_list:
-        # Build indices of first occurrences.
         seen = {}
         unique_indices = []
         for idx, path in enumerate(image_path_list):
@@ -201,34 +193,25 @@ def evaluate_cosine_similarities_random_negtive(model, eval_loader, device):
                 seen[path] = True
                 unique_indices.append(idx)
         
-        # Apply deduplication.
+        # Apply deduplication
         images = images[unique_indices]
         positives = positives[unique_indices]
         N = images.size(0)  # update N after deduplication
     
-    # Create a random permutation for random mismatched pairing.
+    # random permutation for random mismatched pairing
     perm = torch.randperm(N)
-    # Avoid pairing an image with its own (already aligned) positive.
+    # avoid pairing an image with its own positive.
     for i in range(N):
         if perm[i] == i:
             swap_idx = 0 if i == N - 1 else i + 1
             perm[i], perm[swap_idx] = perm[swap_idx], perm[i]
     
-    # Compute cosine similarities for the random (mismatched) pairings.
     rand_cos_sims = (images * positives[perm]).sum(dim=-1)
     avg_rand_neg = rand_cos_sims.mean().item()
     
     return avg_pos, avg_neg, avg_rand_neg, margin
 
 def evaluate_caption_accuracy(model, eval_loader, device, threshold=1.0):
-    """
-    Evaluates the accuracy of the model in distinguishing positive from negative captions.
-    
-    For each sample, the ratio of the image's cosine similarity with the positive caption
-    versus the negative caption is computed. If the ratio is greater than or equal to the threshold,
-    the prediction is considered correct; if it is below the threshold, it is considered incorrect.
-    
-    """
     model.eval()
     ratios = []       
     num_correct = 0   
