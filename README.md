@@ -87,6 +87,28 @@ wget https://raw.githubusercontent.com/WenW186079/HNC_CLIP_masterthesis/main/dat
 pip install git+https://github.com/openai/CLIP.git
 ```
 
+### Overview of the project directory and its main components
+```
+thesis/          
+├── config/                     
+├── data/                      
+│   ├── Coco/                  
+│   ├── gqa_dataset/            
+│   └── HNC/                   
+├── eval/                      
+│   ├── eval_functions.py       
+│   ├── evaluation.py           
+│   └── run_test_data.sh        
+├── models/                    
+├── load_data.py                
+├── loss_func.py                
+├── mainCLIP.py                
+└── trainCLIP.py               
+```
+
+
+
+
 ## Train CLIP model with hard negative captions
 ### Login wandb
 ```
