@@ -3,6 +3,30 @@ The primary goal of this research is to enhance the relational understanding cap
 
 Details seen in [proposal](Proposal.pdf)
 
+# Loss Fucntions
+Here contains 6 ways of loss functions:
+
+- StandardCLIPLoss
+The vanilla CLIP objective: it normalizes image and text embeddings, computes their cosine similarities (scaled by a learnable logit_scale), and applies symmetric cross‐entropy (image→text and text→image) to align matching pairs and repel all other pairs.
+
+- CLIPLossL2
+Extends the standard CLIP loss by explicitly incorporating hard negative capture and an optional L₂ parameter‐regularization term. It also supports a dynamic schedule for increasing the hard‐negative weight over training steps.
+  
+- CLIPLossKL
+Similar to CLIPLossL2’s hard‐negative treatment, but replaces the L₂ regularizer with a KL‐divergence distillation term: a frozen “teacher” CLIP model provides soft (temperature‐scaled) similarity distributions over positives and negatives, which the student minimizes via KL divergence alongside the standard contrastive losses.
+
+- DPOCLIPLoss 
+Implements a direct preference optimization (DPO) loss over (image, positive, negative) triplets: it measures how much the model’s positive–negative score gap improves over the teacher model(clip), and applies a logistic (binary cross‐entropy) penalty to encourage higher preference margins, without any contrastive term.
+
+- DPOContrastiveCLIPLoss
+Combines the DPO logistic loss from DPOCLIPLoss with the standard CLIP contrastive loss: a weighted sum of the two (controlled by alpha) ensures both strong pairwise alignment and improved preference margins relative to a reference model.
+
+- CombinedCLIPDPOLoss
+It computes the standard CLIP contrastive loss and a DPO logistic loss on (image, positive, negative) gaps, plus an optional L₂ regularization on model parameters. Final loss is an alpha-weighted mixture of contrastive and DPO+regularization objectives.
+
+# Select fine tuned parameters
+There are four ways to select 
+
 # Experiments
 
 ## Set an environment
