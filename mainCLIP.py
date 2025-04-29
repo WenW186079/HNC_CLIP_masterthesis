@@ -55,12 +55,13 @@ finetune_mode = CONFIG["training"]['finetune_mode']
 betas=(0.9, 0.98)
 eps=1e-6
 
-
-# Initialize CLIP Models
-# Load CLIP model: "ViT-B/16","ViT-B/32","ViT-L/14","ViT-L/14@336px"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load(model_name, device=device)
 tokenizer = clip.tokenize
+
+teacher_model = copy.deepcopy(model).eval().to(device)
+for param in teacher_model.parameters():
+    param.requires_grad = False
 
 
 if CONFIG["Val"]["split"] == True:
@@ -107,20 +108,6 @@ else:
 if test_json_path is not None:
     test_loader, test_dataset = load_split(test_json_path, "test", image_folder_path, tokenizer, preprocess, batch_size, subset_size=None)
     print(f"Test Dataset size: {len(test_dataset)}")
-
-
-# Evaluate the pre–fine tuning (baseline) model on the test dataset.
-if test_loader is not None:
-    # Set the pre-trained model to evaluation mode.
-    model.eval()
-    baseline_avg_pos, baseline_avg_neg, baseline_margin = evaluate_cosine_similarities(
-        model, test_loader,device
-    )
-    print(f"Baseline Test Scores:")
-    print(f"  Average Positive Cosine Similarity: {baseline_avg_pos:.8f}")
-    print(f"  Average Negative Cosine Similarity: {baseline_avg_neg:.8f}")
-    print(f"  Margin (Positive - Negative): {baseline_margin:.8f}")
- 
 
 set_trainable_parameters(model, finetune_mode)
 trainable_params = [p for p in model.parameters() if p.requires_grad]
@@ -177,29 +164,7 @@ train_clip_model(
     val_loader=val_loader, 
     val_step_frequency=CONFIG["Val"]["val_step_frequency"],
     checkpoint_dir=CONFIG["training"]["checkpoint_dir"],
-    finetune_mode=CONFIG["training"]["finetune_mode"]
+    finetune_mode=CONFIG["training"]["finetune_mode"],
+    teacher_model=teacher_model,
 )
 print("=============end training============")
-
-
-seed = 42
-torch.manual_seed(seed)
-np.random.seed(seed)
-random.seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-
-
-# Evaluate the fine-tuned model on the test dataset.
-if test_loader is not None:
-    model_engine.eval()  
-    final_avg_pos, final_avg_neg, final_margin = evaluate_cosine_similarities(
-        model_engine, test_loader,device
-    )
-    print(f"Final Test Scores after Fine-Tuning:")
-    print(f"  Average Positive Cosine Similarity: {final_avg_pos:.8f}")
-    print(f"  Average Negative Cosine Similarity: {final_avg_neg:.8f}")
-    print(f"  Margin (Positive - Negative): {final_margin:.8f}")
