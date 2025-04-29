@@ -56,7 +56,7 @@ pip install -r requirements.txt
 ```
 
 ### Download HNC dataset
-Thanks to [HNC group(Esra Dönmez*, Pascal Tilli*, Hsiu-Yu Yang*, Ngoc Thang Vu and Carina Silberer)](https://github.com/DigitalPhonetics/hard-negative-captions)
+Thanks to [HNC group(Esra Dönmez, Pascal Tilli, Hsiu-Yu Yang, Ngoc Thang Vu and Carina Silberer)](https://github.com/DigitalPhonetics/hard-negative-captions)
 ```
 git clone https://huggingface.co/datasets/patilli/HNC
 ```
@@ -87,7 +87,7 @@ wget https://raw.githubusercontent.com/WenW186079/HNC_CLIP_masterthesis/main/dat
 pip install git+https://github.com/openai/CLIP.git
 ```
 
-## Use HNC tune CLIP model
+## Train CLIP model with hard negative captions
 ### Login wandb
 ```
 wandb login 
@@ -95,15 +95,23 @@ wandb login
 
 ### Use deepspeed run the code
 ```
+# Adjust the relevent path
 CUDA_VISIBLE_DEVICES=0,1 deepspeed mainCLIP.py --config_path config/config.yaml
 ```
 
 ## Evaluation
 Approach 1: Intrinsic metric
+- Average Positive Cosine Similarity
+- Average Negative Cosine Similarity
+- Margin (Positive - Negative)
+- Average Random Negative Similarity
 
-Approach 2: Distinguishing posivite text from negative text
+Approach 2: Distinguishing posivite text from negative text accuracy
 - GQA dataset
 - Coco dataset
+
+Distinguishing accuracy is measured by comparing how much more similar an image is to its true caption than to a hard negative. For each sample, we compute
+ratio = (cosine_similarity(image, positive_caption)) / (cosine_similarity(image, negative_caption) + ε) and count it as correct if ratio ≥ threshold.
 
 ```
 chmod +x run_test_data.sh
