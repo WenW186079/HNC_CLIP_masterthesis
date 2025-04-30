@@ -5,12 +5,16 @@ import random
 import numpy as np
 import torch
 import clip
+import pandas as pd
+import re
 
 from eval_functions import (evaluate_cosine_similarities,
                    evaluate_cosine_similarities_and_plot,
                    evaluate_cosine_similarities_random_negtive,
                    evaluate_caption_accuracy,
-                   get_caption_ratios)
+                   get_caption_ratios,
+                   evaluate_random_and_distinguish
+                   )
 
 import sys, os
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -21,7 +25,6 @@ from load_data import load_split
 
 def load_finetuned_clip_model(model_name, checkpoint_path, device='cuda', finetune_mode=None):
     model, preprocess = clip.load(model_name, device=device)
-    tokenizer = clip.tokenize
 
     if os.path.exists(checkpoint_path):
         try:
@@ -50,7 +53,17 @@ def load_finetuned_clip_model(model_name, checkpoint_path, device='cuda', finetu
     else:
         print(f"‼️⚠️Checkpoint not found at '{checkpoint_path}'. Using base model.")
 
-    return model, preprocess, tokenizer
+    return model, preprocess
+
+def format_model_name(path: str) -> str:
+        if path is None or path == 'base':
+            return 'base'
+        parent = os.path.basename(os.path.dirname(path))
+        fname = os.path.splitext(os.path.basename(path))[0]
+        m = re.search(r'epoch_(\d+)', fname)
+        epoch = m.group(1) if m else ''
+        return f"{parent}_epoch{epoch}" if epoch else parent
+
 
 def set_determinism(seed=42):
     torch.manual_seed(seed)
@@ -61,39 +74,7 @@ def set_determinism(seed=42):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-def print_comparison_table(results):
-    if results and "Threshold" in results[0]:
-        headers = ["Checkpoint", "Eval_Method", "Threshold", "Accuracy"]
-        header_line = " | ".join(headers)
-        print("\n" + header_line)
-        print("-" * len(header_line))
-        for r in results:
-            row = [
-                str(r.get("Checkpoint", "")),
-                str(r.get("Eval_Method", "")),
-                f"{r.get('Threshold', 0):.2f}",
-                f"{r.get('Accuracy', 0):.8f}"
-            ]
-            print(" | ".join(row))
-    else:
-        headers = ["Checkpoint", "Eval_Method", "Avg_Pos", "Avg_Neg", "Margin"]
-        if results and "Avg_Rand_Neg" in results[0]:
-            headers.append("Avg_Rand_Neg")
-        header_line = " | ".join(headers)
-        print("\n" + header_line)
-        print("-" * len(header_line))
-        for r in results:
-            row = [
-                str(r.get("Checkpoint", "")),
-                str(r.get("Eval_Method", "")),
-                f"{r.get('Avg_Pos', 0):.8f}",
-                f"{r.get('Avg_Neg', 0):.8f}",
-                f"{r.get('Margin', 0):.8f}"
-            ]
-            if "Avg_Rand_Neg" in r:
-                row.append(f"{r.get('Avg_Rand_Neg', 0):.8f}")
-            print(" | ".join(row))
-    print()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate CLIP models using different evaluation methods")
@@ -101,7 +82,7 @@ def main():
                         help="Select 'base' for the original CLIP model, or 'finetuned' for saved checkpoint(s).")
     parser.add_argument("--checkpoint_path", type=str, nargs="+", default=["./checkpoints_dpo/final_model.pt"],
                         help="Path(s) to the fine-tuned model checkpoint(s) (used if model_type is 'finetuned').")
-    parser.add_argument("--eval_method", type=str, default="random", choices=["cosine", "plot", "random",'distinguish'],
+    parser.add_argument("--eval_method", type=str, default="random", choices=["cosine", "plot", "random",'distinguish','random+distinguish'],
                         help="Evaluation method: 'cosine' for evaluate_cosine_similarities, 'plot' for evaluate_cosine_similarities_and_plot, and 'random' for evaluate_cosine_similarities_random_negtive.")
     parser.add_argument("--model_name", type=str, default="ViT-B/32", help="Name of the CLIP model (e.g., ViT-B/32)")
     parser.add_argument("--test_json", type=str, default="./HNC/hnc_clean_strict_test.json", help="Path to test json file")
@@ -116,86 +97,139 @@ def main():
     set_determinism(seed=42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    _ , preprocess = clip.load("ViT-B/32", device=device)
+    tokenizer = clip.tokenize
+
+    test_loader, test_dataset = load_split(
+        args.test_json,
+        'test',
+        args.images_path,
+        tokenizer,
+        preprocess,
+        args.batch_size,
+        subset_size=None,
+        loader_type=args.loader_type
+    )
+    print(f"Test Dataset size: {len(test_dataset)}")
+
     results = [] 
     
     checkpoint_paths = args.checkpoint_path if args.model_type == "finetuned" else [None]
-    
+    thresholds = [1, 1.1, 1.2, 1.5, 2, 3]
+
     for cp_path in checkpoint_paths:
         if args.model_type == "finetuned" and cp_path is not None:
-            model, preprocess, tokenizer = load_finetuned_clip_model(args.model_name, cp_path, device=device, finetune_mode=args.finetune_mode)
+            model, preprocess = load_finetuned_clip_model(args.model_name, cp_path, device=device, finetune_mode=args.finetune_mode)
         else:
             model, preprocess = clip.load(args.model_name, device=device)
-            tokenizer = clip.tokenize
+
 
         model.eval()
-        test_loader, test_dataset = load_split(args.test_json, "test", args.images_path, tokenizer, preprocess, args.batch_size, subset_size=None, loader_type=args.loader_type)
-        print(f"Test Dataset size: {len(test_dataset)}")
-        
-        eval_method = args.eval_method
-        if eval_method == "cosine":
-            with torch.no_grad():
-                avg_pos, avg_neg, margin = evaluate_cosine_similarities(model, test_loader, device)
-            print(f"Checkpoint: {cp_path if cp_path else 'base'} | Eval: cosine")
+
+        model_name = format_model_name(cp_path)
+        method = args.eval_method
+
+        if method == 'cosine':
+            avg_pos, avg_neg, margin = evaluate_cosine_similarities(model, test_loader, device)
+            print(f"Model: {model_name} | Eval: cosine")
             print(f"  Avg_Pos: {avg_pos:.8f}, Avg_Neg: {avg_neg:.8f}, Margin: {margin:.8f}")
             results.append({
-                "Checkpoint": cp_path if cp_path else "base",
-                "Eval_Method": "cosine",
-                "Avg_Pos": avg_pos,
-                "Avg_Neg": avg_neg,
-                "Margin": margin
+                'Model': model_name,
+                'Eval_Method': 'cosine',
+                'Avg_Pos': avg_pos,
+                'Avg_Neg': avg_neg,
+                'Margin': margin
             })
-        elif eval_method == "plot":
-            plot_filename = os.path.basename(cp_path) if cp_path else "base"
+
+        elif method == 'plot':
             avg_pos, avg_neg, margin, _ = evaluate_cosine_similarities_and_plot(
                 model,
                 test_loader,
                 device,
-                plot_title=f"Image vs. Text Cosine Similarity for {plot_filename}",
+                plot_title=f"Cosine Similarity Matrix: {model_name}",
                 figsize=(12, 6),
                 save_plot=True,
-                plot_path=f"combined_similarity_matrix_{plot_filename}.png"
+                plot_path=f"combined_similarity_matrix_{model_name}.png"
             )
-            print(f"Checkpoint: {cp_path if cp_path else 'base'} | Eval: plot")
+            print(f"Model: {model_name} | Eval: plot")
             print(f"  Avg_Pos: {avg_pos:.8f}, Avg_Neg: {avg_neg:.8f}, Margin: {margin:.8f}")
             results.append({
-                "Checkpoint": cp_path if cp_path else "base",
-                "Eval_Method": "plot",
-                "Avg_Pos": avg_pos,
-                "Avg_Neg": avg_neg,
-                "Margin": margin
+                'Model': model_name,
+                'Eval_Method': 'plot',
+                'Avg_Pos': avg_pos,
+                'Avg_Neg': avg_neg,
+                'Margin': margin
             })
-        elif eval_method == "random":
-            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(model, test_loader, device)
-            print(f"Checkpoint: {cp_path if cp_path else 'base'} | Eval: random")
+
+        elif method == 'random':
+            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(
+                model, test_loader, device
+            )
+            print(f"Model: {model_name} | Eval: random")
             print(f"  Avg_Pos: {avg_pos:.8f}, Avg_Neg: {avg_neg:.8f}, Avg_Rand_Neg: {avg_rand_neg:.8f}, Margin: {margin:.8f}")
             results.append({
-                "Checkpoint": cp_path if cp_path else "base",
-                "Eval_Method": "random",
-                "Avg_Pos": avg_pos,
-                "Avg_Neg": avg_neg,
-                "Margin": margin,
-                "Avg_Rand_Neg": avg_rand_neg
+                'Model': model_name,
+                'Eval_Method': 'random',
+                'Avg_Pos': avg_pos,
+                'Avg_Neg': avg_neg,
+                'Margin': margin,
+                'Avg_Rand_Neg': avg_rand_neg
             })
-        elif eval_method == "distinguish":
-            thresholds = [1, 1.1, 1.2, 1.5, 2, 3]
+
+        elif method == 'distinguish':
             ratios = get_caption_ratios(model, test_loader, device)
-            total_samples = len(ratios)
+            total = len(ratios)
+            row = {
+                'Model': model_name,
+                'Eval_Method': 'distinguish'
+            }
             for th in thresholds:
-                num_correct = sum(1 for r in ratios if r >= th)
-                accuracy = num_correct / total_samples if total_samples > 0 else 0
-                print(f"Checkpoint: {cp_path if cp_path else 'base'} | Eval: distinguish | Threshold: {th:.2f}")
-                print(f"  Accuracy: {accuracy:.8f}")
-                results.append({
-                    "Checkpoint": cp_path if cp_path else "base",
-                    "Eval_Method": "distinguish",
-                    "Threshold": th,
-                    "Accuracy": accuracy,
-                })
+                correct = sum(1 for r in ratios if r >= th)
+                acc = correct / total if total > 0 else 0.0
+                row[f"threshold_{th}"] = acc
+            print(f"Model: {model_name} | Eval: distinguish | thresholds: {thresholds}")
+            results.append(row)
+
+        elif method == 'random+distinguish':
+            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(
+                model, test_loader, device
+            )
+            ratios = get_caption_ratios(model, test_loader, device)
+            total = len(ratios)
+            row = {
+                'Model': model_name,
+                'Eval_Method': 'random+distinguish',
+                'Avg_Pos': avg_pos,
+                'Avg_Neg': avg_neg,
+                'Avg_Rand_Neg': avg_rand_neg,
+                'Margin': margin
+            }
+            for th in thresholds:
+                correct = sum(1 for r in ratios if r >= th)
+                acc = correct / total if total > 0 else 0.0
+                row[f"threshold_{th}"] = acc
+            print(f"Model: {model_name} | Eval: random+distinguish | thresholds: {thresholds}")
+            results.append(row)
+
         else:
-            print("Unknown evaluation method.")
-    
-    print("\nComparison Table:")
-    print_comparison_table(results)
+            print(f"Unknown evaluation method: {method}")
+
+
+    df = pd.DataFrame(results).drop(columns=['Eval_Method'], errors='ignore')
+    ordered = [
+        'Model',
+        'Avg_Pos',
+        'Avg_Neg',
+        'Margin',
+        'Avg_Rand_Neg'
+    ] + [f'threshold_{th}' for th in thresholds]
+    ordered = [c for c in ordered if c in df.columns]
+    df = df[ordered]
+
+    print(df.to_string(index=False))
+    csv_path = 'comparison_results.csv'
+    df.to_csv(csv_path, index=False)
+    print(f"✅ Saved results to '{csv_path}'")
 
 if __name__ == "__main__":
     main()
