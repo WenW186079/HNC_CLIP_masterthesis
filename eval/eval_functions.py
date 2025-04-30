@@ -236,3 +236,26 @@ def evaluate_caption_accuracy(model, eval_loader, device, threshold=1.0):
 
     accuracy = num_correct / total_samples if total_samples > 0 else 0
     return accuracy, ratios
+
+def evaluate_random_and_distinguish(
+    model,
+    eval_loader,
+    device,
+    thresholds=None
+):
+    if thresholds is None:
+        thresholds = [1, 1.1, 1.2, 1.5, 2, 3]
+
+    avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(
+        model, eval_loader, device
+    )
+
+    ratios = get_caption_ratios(model, eval_loader, device)
+    total = len(ratios)
+
+    accuracies = {}
+    for th in thresholds:
+        num_correct = sum(1 for r in ratios if r >= th)
+        accuracies[th] = (num_correct / total) if total > 0 else 0.0
+
+    return avg_pos, avg_neg, avg_rand_neg, margin, accuracies
