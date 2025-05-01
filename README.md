@@ -82,8 +82,7 @@ Thanks to [Structure-CLIP](https://github.com/zjukg/Structure-CLIP?tab=readme-ov
 mkdir Coco &&
 cd Coco &&
 wget http://images.cocodataset.org/zips/val2014.zip &&
-unzip val2014.zip -d ./val2014 &&
-wget https://raw.githubusercontent.com/WenW186079/HNC_CLIP_masterthesis/main/dataset/test_coco_aug_withneg.json
+unzip val2014.zip -d ./val2014 
 ```
 
 ### Download CLIP model using git
