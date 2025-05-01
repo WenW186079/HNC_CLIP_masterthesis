@@ -63,6 +63,11 @@ cd data &&
 git clone https://huggingface.co/datasets/patilli/HNC
 ```
 
+Here I used split of this dataset
+```
+git clone https://huggingface.co/datasets/WenWW/HNC_sample
+```
+
 ### Download GQA dataset
 ```
 mkdir gqa_dataset &&
