@@ -77,13 +77,13 @@ unzip images.zip -d ./images
 ```
 
 ### Download Coco dataset for evaluation
-Thanks to [Structure-CLIP](https://github.com/zjukg/Structure-CLIP?tab=readme-ov-file) group
 ```
 mkdir Coco &&
 cd Coco &&
 wget http://images.cocodataset.org/zips/val2014.zip &&
 unzip val2014.zip -d ./val2014 
 ```
+And it's test [json file](dataset/test_coco_aug_withneg.json). Thanks to [Structure-CLIP](https://github.com/zjukg/Structure-CLIP?tab=readme-ov-file) group
 
 ### Download CLIP model using git
 ```
