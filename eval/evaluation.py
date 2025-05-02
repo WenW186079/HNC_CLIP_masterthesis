@@ -23,8 +23,9 @@ sys.path.insert(0, PROJECT_ROOT)
 from load_data import load_split
 
 
-def load_finetuned_clip_model(model_name, checkpoint_path, device='cuda', finetune_mode=None):
+def load_finetuned_clip_model(model_name, checkpoint_path, device, finetune_mode=None):
     model, preprocess = clip.load(model_name, device=device)
+    model = model.to(device)
 
     if os.path.exists(checkpoint_path):
         try:
@@ -88,7 +89,7 @@ def main():
     parser.add_argument("--test_json", type=str, default="./HNC/hnc_clean_strict_test.json", help="Path to test json file")
     parser.add_argument("--images_path", type=str, default="./gqa_dataset/images/images", help="Path to test images")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for evaluation")
-    parser.add_argument("--finetune_mode", type=str, default="full_encoder", choices=["text_encoder", "vision_encoder", "full_encoder"],
+    parser.add_argument("--finetune_mode", type=str, default="full_encoder", choices=["text_encoder", "vision_encoder", "full_encoder", 'last_encoder'],
                         help="The fine-tuning mode that was applied when training the checkpoint.")
     parser.add_argument("--loader_type", type=str, default="hnc", choices=["hnc", "coco"],
                         help="The dataset type to load: 'hnc' for the standard HNC dataset, 'coco' for COCO-style paired data.")
@@ -96,6 +97,8 @@ def main():
 
     set_determinism(seed=42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == 'cpu':
+        logging.warning("‼️⚠️CUDA not available — running on CPU.")
 
     _ , preprocess = clip.load("ViT-B/32", device=device)
     tokenizer = clip.tokenize
@@ -107,7 +110,7 @@ def main():
         tokenizer,
         preprocess,
         args.batch_size,
-        subset_size=None,
+        subset_size=1000,
         loader_type=args.loader_type
     )
     print(f"Test Dataset size: {len(test_dataset)}")
@@ -227,7 +230,7 @@ def main():
     df = df[ordered]
 
     print(df.to_string(index=False))
-    csv_path = 'comparison_results.csv'
+    csv_path = 'result_scores.csv'
     df.to_csv(csv_path, index=False)
     print(f"✅ Saved results to '{csv_path}'")
 
