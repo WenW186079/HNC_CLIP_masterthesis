@@ -12,7 +12,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from load_data import load_split
 
-# ---------- USER-CONFIGURABLE PARAMETERS ----------
+# -----------------------------------------------
 CHECKPOINT_PATH = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/models/HNC_1_full_small_ref/epoch_1_full_encoder.pt"  
 TEST_JSON       = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/data/HNC/hnc_clean_strict_test.json"
 IMAGES_PATH     = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/data/gqa_dataset/images/images"
@@ -32,7 +32,7 @@ def main():
 
     ds = getattr(test_dataset, 'dataset', test_dataset)
     if not hasattr(ds, 'data_pairs'):
-        raise AttributeError("Dataset object has no attribute 'data_pairs'. Ensure you're using LoadCLIPDataset or LoadCOCOPair.")
+        raise AttributeError("Dataset has no 'data_pairs'")
 
     raw_pairs = ds.data_pairs[:FIRST_K]
     if len(raw_pairs) < FIRST_K:
