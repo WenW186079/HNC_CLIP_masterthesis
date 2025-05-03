@@ -3,13 +3,16 @@
 cd "$(dirname "$0")/.."
 PROJECT_ROOT=$(pwd)
 
-MODEL_TYPE="finetuned"  # "base","finetuned"
-
-paths=( "$PROJECT_ROOT/models/HNC_L2_1_S_text/epoch_"{1..100}"_full_encoder.pt" )
+paths=(
+  "$PROJECT_ROOT/models/DPO_KL_S_full/epoch_"{1..42}"_full_encoder.pt"
+  "$PROJECT_ROOT/models/C_DPO_KL_S_full/epoch_"{1..50}"_full_encoder.pt"
+  "$PROJECT_ROOT/models/HNC_L2_100_S_full/epoch_"{1..20}"_full_encoder.pt"
+)
 CHECKPOINTS="${paths[*]}"
 
-FINETUNE_TYPE='full_encoder'     # 'text_encoder','vision_encoder','full_encoder'
-EVAL_METHOD="random"             # "cosine", "plot", "random", "distinguish"
+MODEL_TYPE="finetuned"              # "base","finetuned"
+FINETUNE_TYPE='full_encoder'        # 'text_encoder','vision_encoder','full_encoder',"last_encoder"
+EVAL_METHOD="random+distinguish"    # "cosine", "plot", "random", "distinguish", 'random+distinguish'
 MODEL_NAME="ViT-B/32"
 BATCH_SIZE=32
 
@@ -21,7 +24,7 @@ IMAGES_PATH="$PROJECT_ROOT/data/gqa_dataset/images/images"
 # TEST_JSON="$PROJECT_ROOT/data/Coco/test_coco_aug_withneg.json"
 # IMAGES_PATH="$PROJECT_ROOT/data/Coco/val2014"
 
-CUDA_VISIBLE_DEVICES=3  python eval/evaluation.py \
+CUDA_VISIBLE_DEVICES=3 python eval/evaluation.py \
     --model_type $MODEL_TYPE \
     --checkpoint_path $CHECKPOINTS \
     --eval_method $EVAL_METHOD \
