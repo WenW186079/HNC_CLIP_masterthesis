@@ -195,7 +195,7 @@ def train_clip_model(
         print('=======Standard mode=======')
         loss_fn = StandardCLIPLoss()
     elif mode.lower() == 'dpo_kl':
-        print('======= DPO KL mode (Combined) =======')
+        print('======= DPO KL mode =======')
         loss_fn = DPOCLIPLoss(beta=dpo_beta)
     elif mode.lower() == 'contrastive_dpo_kl':
         print('======= DPO mode (Combined) KL =======')
@@ -271,7 +271,13 @@ def train_clip_model(
                     "margin_in_train": margin,
                 }
             elif mode.lower() == 'contrastive_dpo_l2':
-                total_loss, contrastive_loss, dpo_loss, reg_loss = loss_outputs
+                total_loss, contrastive_loss, dpo_loss, reg_loss = loss_fn(
+                    image_features, 
+                    text_features, 
+                    logit_scale, 
+                    original_state_dict=original_state_dict, 
+                    model=model_engine
+                )
                 loss_dict = {
                     "loss_total": total_loss,
                     "loss_dpo": dpo_loss,
@@ -367,7 +373,6 @@ def train_clip_model(
             total_loss += loss.item()
             progress_bar.set_postfix()
 
-            # Determine current weight for logging.
             if hasattr(loss_fn, "dynamic_weight") and loss_fn.dynamic_weight:
                 max_update_step = loss_fn.update_interval * loss_fn.num_updates
                 if loss_fn.current_step < max_update_step:
