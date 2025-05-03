@@ -116,12 +116,12 @@ def evaluate_cosine_similarities_and_plot(
     avg_neg = sum(neg_similarities) / len(neg_similarities)
     margin = avg_pos - avg_neg
 
-    all_img_embs = torch.cat(all_img_embs, dim=0).float()  # Shape: [N, D]
-    all_pos_embs = torch.cat(all_pos_embs, dim=0).float()  # Shape: [N, D]
-    all_neg_embs = torch.cat(all_neg_embs, dim=0).float()  # Shape: [N, D]
+    all_img_embs = torch.cat(all_img_embs, dim=0).float()  
+    all_pos_embs = torch.cat(all_pos_embs, dim=0).float()  
+    all_neg_embs = torch.cat(all_neg_embs, dim=0).float()  
 
-    pos_matrix = all_img_embs @ all_pos_embs.t()  # Shape: [N, N] for image vs. positive texts.
-    neg_matrix = all_img_embs @ all_neg_embs.t()  # Shape: [N, N] for image vs. negative texts.
+    pos_matrix = all_img_embs @ all_pos_embs.t()  # [N, N],image vs. positive texts.
+    neg_matrix = all_img_embs @ all_neg_embs.t()  # [N, N],image vs. negative texts.
 
     combined_matrix = torch.cat([pos_matrix, neg_matrix], dim=1)  # [N, 2N]
 
