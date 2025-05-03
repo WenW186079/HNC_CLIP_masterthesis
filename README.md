@@ -42,14 +42,14 @@ Control which parts of CLIP are trainable:
 
 
 # Experiments
-
-## Set an environment
+## Setup
+### Set an environment
 ```
 python3.10 -m venv thesis_env
 source /mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thesis_env/bin/activate 
 ```
 
-## Install the packages
+### Install the packages
 - To install the required dependencies in your environment run: 
 ```
 pip install -r requirements.txt
@@ -108,8 +108,6 @@ thesis/
 ├── mainCLIP.py                
 └── trainCLIP.py               
 ```
-
-
 
 
 ## Train CLIP model with hard negative captions
