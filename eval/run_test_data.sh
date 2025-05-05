@@ -4,14 +4,12 @@ cd "$(dirname "$0")/.."
 PROJECT_ROOT=$(pwd)
 
 paths=(
-  "$PROJECT_ROOT/models/DPO_KL_S_full/epoch_"{1..42}"_full_encoder.pt"
-  "$PROJECT_ROOT/models/C_DPO_KL_S_full/epoch_"{1..50}"_full_encoder.pt"
-  "$PROJECT_ROOT/models/HNC_L2_100_S_full/epoch_"{1..20}"_full_encoder.pt"
+  "$PROJECT_ROOT/models/HNC_KL_10_S_last/epoch_"{1..2}"_last_encoder.pt"
 )
 CHECKPOINTS="${paths[*]}"
 
 MODEL_TYPE="finetuned"              # "base","finetuned"
-FINETUNE_TYPE='full_encoder'        # 'text_encoder','vision_encoder','full_encoder',"last_encoder"
+FINETUNE_TYPE='last_encoder'        # 'text_encoder','vision_encoder','full_encoder',"last_encoder"
 EVAL_METHOD="random+distinguish"    # "cosine", "plot", "random", "distinguish", 'random+distinguish'
 MODEL_NAME="ViT-B/32"
 BATCH_SIZE=32
