@@ -13,9 +13,9 @@ sys.path.insert(0, PROJECT_ROOT)
 from load_data import load_split
 
 # -----------------------------------------------
-CHECKPOINT_PATH = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/models/HNC_1_full_small_ref/epoch_1_full_encoder.pt"  
-TEST_JSON       = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/data/HNC/hnc_clean_strict_test.json"
-IMAGES_PATH     = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/data/gqa_dataset/images/images"
+CHECKPOINT_PATH = "./models/HNC_1_full_small_ref/epoch_1_full_encoder.pt"  
+TEST_JSON       = "./data/HNC/hnc_clean_strict_test.json"
+IMAGES_PATH     = "./data/gqa_dataset/images/images"
 LOADER_TYPE     = "hnc"  # "hnc" or "coco"
 BATCH_SIZE      = 32
 FIRST_K         = 10
