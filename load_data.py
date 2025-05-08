@@ -9,6 +9,8 @@ import random
 import torch.distributed as dist
 import json
 
+from functools import partial
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
 console_handler = logging.StreamHandler()
@@ -114,7 +116,7 @@ class LoadCLIPDataset(Dataset):
         neg_tokens = self.tokenizer([neg_caption])[0]
         return {
             "image_path": image_path,
-            "pixel_values": image,    # image tensor (preprocessed)
+            "pixel_values": image,      # image tensor (preprocessed)
             "pos_text": pos_tokens,     # positive caption tokens
             "neg_text": neg_tokens      # negative caption tokens
         }
@@ -186,6 +188,55 @@ def load_split(json_path, dataset_type, image_folder_path, tokenizer, transform,
             dataset=dataset_type,
             subset_size=subset_size
         )
+
+def deduplicate_and_refill(batch, dataset, device, batch_size, mode=None):
+    paths = batch["image_path"]
+    pixs  = batch["pixel_values"]
+    poss  = batch["pos_text"]
+    negs  = batch["neg_text"]
+
+    seen = set()
+    unique_idxs = []
+    
+    for i, p in enumerate(paths):
+        if p not in seen:
+            seen.add(p)
+            unique_idxs.append(i)
+
+    unique_pix = [pixs[i] for i in unique_idxs]
+    unique_pos = [poss[i] for i in unique_idxs]
+    unique_neg = [negs[i] for i in unique_idxs]
+
+    num_missing = batch_size - len(unique_idxs)
+    if num_missing > 0:
+        all_idxs = set(range(len(dataset)))
+        seen_set_idxs = {
+            idx for idx, (img_p, _, _) in enumerate(dataset.data_pairs)
+            if img_p in seen
+        }
+        candidates = list(all_idxs - seen_set_idxs)
+        extra = random.sample(candidates, num_missing)
+        for idx in extra:
+            img_p, pos_cap, neg_cap = dataset.data_pairs[idx]
+
+            img = Image.open(img_p).convert("RGB")
+            if dataset.transform:
+                img = dataset.transform(img)
+            pos_tok = dataset.tokenizer([pos_cap])[0]
+            neg_tok = dataset.tokenizer([neg_cap])[0]
+
+            unique_pix.append(img)
+            unique_pos.append(pos_tok)
+            unique_neg.append(neg_tok)
+
+    images = torch.stack(unique_pix).to(device)
+    pos_ts = torch.stack(unique_pos).to(device)
+    neg_ts = torch.stack(unique_neg).to(device)
+
+    if mode and mode.lower() == 'standard':
+        return images, pos_ts
+    else:
+        return images, torch.cat([pos_ts, neg_ts], dim=0)
 
 def deduplicate_batch(batch, device, mode=None):
     seen = set()
