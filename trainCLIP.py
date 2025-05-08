@@ -13,7 +13,7 @@ import random
 import clip
 
 from loss_func import StandardCLIPLoss, CLIPLossL2, CLIPLossKL, DPOCLIPLoss, DPOContrastiveCLIPLoss, CombinedCLIPDPOLoss
-from load_data import deduplicate_batch
+from load_data import deduplicate_and_refill
 from eval.eval_functions import evaluate_cosine_similarities,evaluate_cosine_similarities_and_plot,evaluate_cosine_similarities_random_negtive
 
 def set_trainable_parameters(model, finetune_mode):
@@ -227,7 +227,7 @@ def train_clip_model(
             if hasattr(loss_fn, "update_step"):
                 loss_fn.update_step(global_step)
 
-            images, text_inputs = deduplicate_batch(batch, device, mode=mode)
+            images, text_inputs = deduplicate_and_refill(batch, data_loader.dataset, device, batch_size, mode=mode)
 
             with torch.cuda.amp.autocast():
                 image_features = model_engine.module.encode_image(images)
