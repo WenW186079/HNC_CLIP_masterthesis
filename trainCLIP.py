@@ -498,9 +498,17 @@ def train_clip_model(
         if checkpoint_dir is not None and dist.get_rank() == 0 :
             save_checkpoint(model_engine, optimizer, epoch + 1, checkpoint_dir, finetune_mode, filename=None)
         
+        # ---- Begin Validation Step ----
+        if val_loader is not None:
+            model_to_eval = model_engine.module if hasattr(model_engine, "module") else model_engine
+            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(model_to_eval, val_loader, device)
+            if dist.get_rank() == 0:
+                wandb.log({
+                    "val/avg_pos": avg_pos,
+                    "val/avg_neg": avg_neg,
+                    "val/random_neg": avg_rand_neg,
+                    "val/margin": margin,
+                })
+            # ---- End Validation Step ----
+        
     wandb.finish()
-
-    # # After the training loop ends.
-    # if dist.get_rank() == 0 and checkpoint_dir is not None:
-    #     filename = f"{finetune_mode}_final_model.pt"
-    #     save_checkpoint(model_engine, optimizer, num_epochs, checkpoint_dir, finetune_mode, filename=filename)
