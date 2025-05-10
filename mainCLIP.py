@@ -79,6 +79,7 @@ if CONFIG["Val"]["split"] == True:
         train_dataset,
         batch_size=CONFIG["deepspeed"]["config"]["train_micro_batch_size_per_gpu"],
         sampler=sampler,
+        drop_last=True
     )
 
     val_loader = DataLoader(
@@ -103,6 +104,7 @@ else:
         train_dataset,
         batch_size=CONFIG["deepspeed"]["config"]["train_micro_batch_size_per_gpu"],
         sampler=sampler,
+        drop_last=True
     )
 
 if test_json_path is not None:
