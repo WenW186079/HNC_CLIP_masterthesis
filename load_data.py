@@ -56,7 +56,6 @@ class LoadCLIPDataset(Dataset):
                         # Separate positive and negative captions.
                         pos_list = [(cap_id, cap_data) for cap_id, cap_data in cap_list if cap_data["label"] == 1]
                         neg_list = [(cap_id, cap_data) for cap_id, cap_data in cap_list if cap_data["label"] == 0]
-                        # Sort by caption id (assuming numeric strings).
                         try:
                             pos_list.sort(key=lambda x: int(x[0]))
                             neg_list.sort(key=lambda x: int(x[0]))
