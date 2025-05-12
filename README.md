@@ -1,7 +1,7 @@
 # HNC_CLIP_masterthesis
 The primary goal of this research is to enhance the relational understanding capabilities of CLIP while preserving its strong object recognition performance. This will be achieved by fine-tuning CLIP using the Hard Negative Captions (HNC) dataset, which provides positive samples paired with minimally contradictory negative samples. The fine-tuning process will involve training the model to minimize the similarity between an image and its corresponding positive caption while maximizing the similarity between the image and its hard negative caption and other random negative captions. Based on the traditional CLIP loss function, the hard negative loss will be added with weight. By using negative samples that closely resemble the positive ones, the model will be forced to capture finer-grained features and develop a more nuanced understanding of object relationships. The key objective is to create a fine-tuned version of CLIP that excels in both object recognition and relational reasoning, overcoming the limitations of the original model. The resulting model will be a robust vision-language system capable of handling complex scenarios requiring relational awareness, with potential applications in tasks like Visual Question Answering (VQA) and other multimodal reasoning tasks. 
 
-Details seen in [proposal](Proposal.pdf)
+Details seen in [slides](reports/slides.pdf)
 
 # Loss Fucntions
 This repository implements six alternative loss functions for CLIP-style training:
@@ -123,6 +123,10 @@ CUDA_VISIBLE_DEVICES=0,1 deepspeed mainCLIP.py --config_path config/config.yaml
 ```
 
 ## Evaluation
+Test datasets 
+- GQA test dataset
+- Coco test dataset
+
 Approach 1: Intrinsic metric
 - Average Positive Cosine Similarity
 - Average Negative Cosine Similarity
@@ -130,8 +134,6 @@ Approach 1: Intrinsic metric
 - Average Random Negative Similarity
 
 Approach 2: Distinguishing posivite text from negative text accuracy
-- GQA dataset
-- Coco dataset
 
 Distinguishing accuracy is measured by comparing how much more similar an image is to its true caption than to a hard negative. For each sample, we compute
 ratio = (cosine_similarity(image, positive_caption)) / (cosine_similarity(image, negative_caption) + ε) and count it as correct if ratio ≥ threshold.
@@ -148,3 +150,7 @@ Details can be found [here](result_and_analysis)
 
 # Models
 All models can be found [here](https://drive.google.com/drive/folders/11Pxr9IA4l4EegGzgcvBzVNPWCxFmqsGl?usp=drive_link) with relative [config](config) files
+
+# Explanation
+Here I used second-order attribution pipeline, thanks to [Pascal Tilli, Lucas Moelleret al.](https://arxiv.org/abs/2408.14153)
+
