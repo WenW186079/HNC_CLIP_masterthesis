@@ -16,8 +16,8 @@ training:
   finetune_mode: 'full_encoder'  # Choose 'text_encoder' or 'vision_encoder' or 'full_encoder',"last_encoder"
 
   lambda_ref: 0.001
-  hard_neg_weight: 10.0
-  dynamic_weight: True 
+  hard_neg_weight: 1.0
+  dynamic_weight: False 
   min_weight: 1
   max_weight: 10
   update_interval: 1000
@@ -25,7 +25,7 @@ training:
 
   dpo_beta: 0.1
   
-  checkpoint_dir: './models/DPO_KL_S_full'
+  checkpoint_dir: './models/DPO_KL_S_full_new'
 
 Val:
   val_size: 1000
@@ -36,7 +36,7 @@ Val:
 deepspeed:
   config:
     train_batch_size: 128
-    train_micro_batch_size_per_gpu: 32
+    train_micro_batch_size_per_gpu: 64
     gradient_accumulation_steps: 2
     gradient_checkpointing: false
     gradient_clipping: 1.0
