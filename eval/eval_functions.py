@@ -7,20 +7,33 @@ from torch.utils.data import DataLoader
 import random
 import matplotlib.pyplot as plt
 
-def compute_cosine_similarities(model, pixel_values, pos_text, neg_text):
+def compute_cosine_similarities(
+    model,
+    batch: dict,
+    device: torch.device,
+    return_embeddings: bool = False
+):
+    imgs     = batch["pixel_values"].to(device)
+    pos_txts = batch["pos_text"].to(device)
+    neg_txts = batch["neg_text"].to(device)
+
     with torch.cuda.amp.autocast():
-        image_features = model.encode_image(pixel_values)
-        pos_features = model.encode_text(pos_text)
-        neg_features = model.encode_text(neg_text)
+        img_feats = model.encode_image(imgs)
+        pos_feats = model.encode_text(pos_txts)
+        neg_feats = model.encode_text(neg_txts)
 
-    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-    pos_features = pos_features / pos_features.norm(dim=-1, keepdim=True)
-    neg_features = neg_features / neg_features.norm(dim=-1, keepdim=True)
+    img_feats = F.normalize(img_feats, dim=-1)
+    pos_feats = F.normalize(pos_feats, dim=-1)
+    neg_feats = F.normalize(neg_feats, dim=-1)
 
-    pos_cos_sim = F.cosine_similarity(image_features, pos_features, dim=-1)
-    neg_cos_sim = F.cosine_similarity(image_features, neg_features, dim=-1)
+    pos_cos = F.cosine_similarity(img_feats, pos_feats, dim=-1)
+    neg_cos = F.cosine_similarity(img_feats, neg_feats, dim=-1)
 
-    return pos_cos_sim, neg_cos_sim
+    if return_embeddings:
+        return pos_cos, neg_cos, img_feats, pos_feats, neg_feats
+    else:
+        return pos_cos, neg_cos
+
 
 def get_caption_ratios(model, eval_loader, device, epsilon=1e-8):
     ratios = []
@@ -38,32 +51,18 @@ def get_caption_ratios(model, eval_loader, device, epsilon=1e-8):
     
 def evaluate_cosine_similarities(model, eval_loader, device):
     model.eval()
-    pos_similarities = []
-    neg_similarities = []
+    pos_sims, neg_sims = [], []
 
     with torch.no_grad():
         for batch in eval_loader:
-            pixel_values = batch["pixel_values"].to(device)
-            pos_text = batch["pos_text"].to(device)
-            neg_text = batch["neg_text"].to(device)
+            pos_cos, neg_cos = compute_cosine_similarities(
+                model, batch, device
+            )
+            pos_sims.extend(pos_cos.cpu().tolist())
+            neg_sims.extend(neg_cos.cpu().tolist())
 
-            with torch.cuda.amp.autocast():
-                image_features = model.encode_image(pixel_values)
-                pos_features = model.encode_text(pos_text)
-                neg_features = model.encode_text(neg_text)
-
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            pos_features = pos_features / pos_features.norm(dim=-1, keepdim=True)
-            neg_features = neg_features / neg_features.norm(dim=-1, keepdim=True)
-
-            pos_cos_sim = F.cosine_similarity(image_features, pos_features, dim=-1)
-            neg_cos_sim = F.cosine_similarity(image_features, neg_features, dim=-1)
-
-            pos_similarities.extend(pos_cos_sim.cpu().tolist())
-            neg_similarities.extend(neg_cos_sim.cpu().tolist())
-
-    avg_pos = sum(pos_similarities) / len(pos_similarities)
-    avg_neg = sum(neg_similarities) / len(neg_similarities)
+    avg_pos = sum(pos_sims) / len(pos_sims)
+    avg_neg = sum(neg_sims) / len(neg_sims)
     margin = avg_pos - avg_neg
 
     return avg_pos, avg_neg, margin
@@ -79,50 +78,31 @@ def evaluate_cosine_similarities_and_plot(
     ):
     
     model.eval()
-
-    pos_similarities = []
-    neg_similarities = []
+    pos_sims, neg_sims = [], []
+    all_img_embs, all_pos_embs, all_neg_embs = [], [], []
     
-    all_img_embs = []
-    all_pos_embs = []
-    all_neg_embs = []
-
     with torch.no_grad():
         for batch in eval_loader:
-            pixel_values = batch["pixel_values"].to(device)
-            pos_text = batch["pos_text"].to(device)
-            neg_text = batch["neg_text"].to(device)
-            
-            with torch.cuda.amp.autocast():
-                image_features = model.encode_image(pixel_values)
-                pos_features = model.encode_text(pos_text)
-                neg_features = model.encode_text(neg_text)
-            
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            pos_features = pos_features / pos_features.norm(dim=-1, keepdim=True)
-            neg_features = neg_features / neg_features.norm(dim=-1, keepdim=True)
-            
-            pos_cos_sim = F.cosine_similarity(image_features, pos_features, dim=-1)
-            neg_cos_sim = F.cosine_similarity(image_features, neg_features, dim=-1)
-            
-            pos_similarities.extend(pos_cos_sim.cpu().tolist())
-            neg_similarities.extend(neg_cos_sim.cpu().tolist())
-            
-            all_img_embs.append(image_features.cpu())
-            all_pos_embs.append(pos_features.cpu())
-            all_neg_embs.append(neg_features.cpu())
+            pos_cos, neg_cos, img_feats, pos_feats, neg_feats = compute_cosine_similarities(
+                    model, batch, device, return_embeddings=True
+                )
+            pos_sims.extend(pos_cos.cpu().tolist())
+            neg_sims.extend(neg_cos.cpu().tolist())
 
-    avg_pos = sum(pos_similarities) / len(pos_similarities)
-    avg_neg = sum(neg_similarities) / len(neg_similarities)
+            all_img_embs.append(img_feats.cpu())
+            all_pos_embs.append(pos_feats.cpu())
+            all_neg_embs.append(neg_feats.cpu())
+
+    avg_pos = sum(pos_sims) / len(pos_sims)
+    avg_neg = sum(neg_sims) / len(neg_sims)
     margin = avg_pos - avg_neg
 
     all_img_embs = torch.cat(all_img_embs, dim=0).float()  
     all_pos_embs = torch.cat(all_pos_embs, dim=0).float()  
     all_neg_embs = torch.cat(all_neg_embs, dim=0).float()  
 
-    pos_matrix = all_img_embs @ all_pos_embs.t()  # [N, N],image vs. positive texts.
-    neg_matrix = all_img_embs @ all_neg_embs.t()  # [N, N],image vs. negative texts.
-
+    pos_matrix = all_img_embs @ all_pos_embs.t()  
+    neg_matrix = all_img_embs @ all_neg_embs.t()  
     combined_matrix = torch.cat([pos_matrix, neg_matrix], dim=1)  # [N, 2N]
 
     plt.figure(figsize=figsize)
@@ -141,65 +121,45 @@ def evaluate_cosine_similarities_and_plot(
 
     return avg_pos, avg_neg, margin, combined_matrix
 
-def evaluate_cosine_similarities_random_negtive(model, eval_loader, device):
+def evaluate_cosine_similarities_random_negative(model, eval_loader, device):
     model.eval()
-    pos_similarities = []
-    neg_similarities = []
-    
-    image_emb_list = []
-    pos_emb_list = []
-    image_path_list = []  
+    pos_sims, neg_sims = [], []
+    all_img_embs, all_pos_embs = [], []
+    paths = [] 
 
     with torch.no_grad():
         for batch in eval_loader:
-            pixel_values = batch["pixel_values"].to(device)
-            pos_text = batch["pos_text"].to(device)
-            neg_text = batch["neg_text"].to(device)
-            
-            with torch.cuda.amp.autocast():
-                image_features = model.encode_image(pixel_values)
-                pos_features = model.encode_text(pos_text)
-                neg_features = model.encode_text(neg_text)
-            
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            pos_features   = pos_features   / pos_features.norm(dim=-1, keepdim=True)
-            neg_features   = neg_features   / neg_features.norm(dim=-1, keepdim=True)
-            
-            pos_cos_sim = F.cosine_similarity(image_features, pos_features, dim=-1)
-            neg_cos_sim = F.cosine_similarity(image_features, neg_features, dim=-1)
-            
-            pos_similarities.extend(pos_cos_sim.cpu().tolist())
-            neg_similarities.extend(neg_cos_sim.cpu().tolist())
-            
-            image_emb_list.append(image_features.cpu())
-            pos_emb_list.append(pos_features.cpu())
-            
-            if "image_path" in batch:
-                image_path_list.extend(batch["image_path"])
+            pos_cos, neg_cos, img_feats, pos_feats, _ = compute_cosine_similarities(
+                model, batch, device, return_embeddings=True
+            )
+            pos_sims.extend(pos_cos.cpu().tolist())
+            neg_sims.extend(neg_cos.cpu().tolist())
+
+            all_img_embs.append(img_feats.cpu())
+            all_pos_embs.append(pos_feats.cpu())
+            paths.extend(batch.get("image_path", []))
     
-    avg_pos = sum(pos_similarities) / len(pos_similarities)
-    avg_neg = sum(neg_similarities) / len(neg_similarities)
+    avg_pos = sum(pos_sims) / len(pos_sims)
+    avg_neg = sum(neg_sims) / len(neg_sims)
     margin  = avg_pos - avg_neg
     
-    images = torch.cat(image_emb_list, dim=0).float()   
-    positives = torch.cat(pos_emb_list, dim=0).float()     
-    N = images.size(0)
+    images = torch.cat(all_img_embs, dim=0).float()   
+    positives = torch.cat(all_pos_embs, dim=0).float()     
+
+    if paths:
+        seen, uniq_idxs = set(), []
+        for i, p in enumerate(paths):
+            if p not in seen:
+                seen.add(p)
+                uniq_idxs.append(i)
+        images    = images[uniq_idxs]
+        positives = positives[uniq_idxs]
+
+    N = images.size(0)  
     
-    if image_path_list:
-        seen = {}
-        unique_indices = []
-        for idx, path in enumerate(image_path_list):
-            if path not in seen:
-                seen[path] = True
-                unique_indices.append(idx)
-        
-        # Apply deduplication
-        images = images[unique_indices]
-        positives = positives[unique_indices]
-        N = images.size(0)  # update N after deduplication
-    
-    # random permutation for random mismatched pairing
+    torch.manual_seed(42)
     perm = torch.randperm(N)
+    
     # avoid pairing an image with its own positive.
     for i in range(N):
         if perm[i] == i:
@@ -211,51 +171,39 @@ def evaluate_cosine_similarities_random_negtive(model, eval_loader, device):
     
     return avg_pos, avg_neg, avg_rand_neg, margin
 
-def evaluate_caption_accuracy(model, eval_loader, device, threshold=1.0):
+def evaluate_thresholds_accuracy(model, eval_loader, device,
+                                 thresholds=[1, 1.1, 1.2, 1.5, 2, 3]):
+
     model.eval()
-    ratios = []       
-    num_correct = 0   
-    total_samples = 0
-    epsilon = 1e-8   
+    ratios = []
+    epsilon=1e-8
 
     with torch.no_grad():
         for batch in eval_loader:
-            pixel_values = batch["pixel_values"].to(device)
-            pos_text = batch["pos_text"].to(device)
-            neg_text = batch["neg_text"].to(device)
-            
-            pos_cos_sim, neg_cos_sim = compute_cosine_similarities(model, pixel_values, pos_text, neg_text)
-            
-            batch_ratios = (pos_cos_sim / (neg_cos_sim + epsilon)).cpu().tolist()
-            ratios.extend(batch_ratios)
-            
-            for ratio in batch_ratios:
-                total_samples += 1
-                if ratio >= threshold:
-                    num_correct += 1
+            pos_cos, neg_cos = compute_cosine_similarities(model, batch, device)
+            ratios.extend((pos_cos / (neg_cos + epsilon)).cpu().tolist())
 
-    accuracy = num_correct / total_samples if total_samples > 0 else 0
-    return accuracy, ratios
+    total = len(ratios)
+    accuracies = {}
+    for τ in thresholds:
+        correct = sum(1 for r in ratios if r >= τ)
+        accuracies[τ] = correct / total if total > 0 else 0.0
 
-def evaluate_random_and_distinguish(
+    return accuracies
+
+def evaluate_random_and_thresholds(
     model,
     eval_loader,
     device,
     thresholds=None
 ):
+    epsilon=1e-8
+
     if thresholds is None:
         thresholds = [1, 1.1, 1.2, 1.5, 2, 3]
 
-    avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(
+    avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negative(
         model, eval_loader, device
     )
-
-    ratios = get_caption_ratios(model, eval_loader, device)
-    total = len(ratios)
-
-    accuracies = {}
-    for th in thresholds:
-        num_correct = sum(1 for r in ratios if r >= th)
-        accuracies[th] = (num_correct / total) if total > 0 else 0.0
-
-    return avg_pos, avg_neg, avg_rand_neg, margin, accuracies
+    accs = evaluate_thresholds_accuracy(model, eval_loader, device, thresholds)
+    return avg_pos, avg_neg, avg_rand_neg, margin, accs
