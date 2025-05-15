@@ -105,7 +105,7 @@ def main():
 
     test_loader, test_dataset = load_split(
         args.test_json,
-        'val',
+        'test',
         args.images_path,
         tokenizer,
         preprocess,
