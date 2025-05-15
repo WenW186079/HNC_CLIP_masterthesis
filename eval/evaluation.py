@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import logging
 import random
 import numpy as np
@@ -10,13 +11,12 @@ import re
 
 from eval_functions import (evaluate_cosine_similarities,
                    evaluate_cosine_similarities_and_plot,
-                   evaluate_cosine_similarities_random_negtive,
-                   evaluate_caption_accuracy,
+                   evaluate_cosine_similarities_random_negative,
+                   evaluate_thresholds_accuracy,
                    get_caption_ratios,
-                   evaluate_random_and_distinguish
+                   evaluate_random_and_thresholds
                    )
 
-import sys, os
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
@@ -65,16 +65,14 @@ def format_model_name(path: str) -> str:
         epoch = m.group(1) if m else ''
         return f"{parent}_epoch{epoch}" if epoch else parent
 
-
-def set_determinism(seed=42):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+def set_all_seeds(seed: int = 42):
     random.seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark   = False
 
 
 def main():
@@ -83,8 +81,8 @@ def main():
                         help="Select 'base' for the original CLIP model, or 'finetuned' for saved checkpoint(s).")
     parser.add_argument("--checkpoint_path", type=str, nargs="+", default=["./checkpoints_dpo/final_model.pt"],
                         help="Path(s) to the fine-tuned model checkpoint(s) (used if model_type is 'finetuned').")
-    parser.add_argument("--eval_method", type=str, default="random", choices=["cosine", "plot", "random",'distinguish','random+distinguish'],
-                        help="Evaluation method: 'cosine' for evaluate_cosine_similarities, 'plot' for evaluate_cosine_similarities_and_plot, and 'random' for evaluate_cosine_similarities_random_negtive.")
+    parser.add_argument("--eval_method", type=str, default="random", choices=["cosine", "plot", "random",'thresholds','random+thresholds'],
+                        help="Evaluation method: 'cosine' for evaluate_cosine_similarities, 'plot' for evaluate_cosine_similarities_and_plot, and 'random' for evaluate_cosine_similarities_random_negative.")
     parser.add_argument("--model_name", type=str, default="ViT-B/32", help="Name of the CLIP model (e.g., ViT-B/32)")
     parser.add_argument("--test_json", type=str, default="./HNC/hnc_clean_strict_test.json", help="Path to test json file")
     parser.add_argument("--images_path", type=str, default="./gqa_dataset/images/images", help="Path to test images")
@@ -93,9 +91,11 @@ def main():
                         help="The fine-tuning mode that was applied when training the checkpoint.")
     parser.add_argument("--loader_type", type=str, default="hnc", choices=["hnc", "coco"],
                         help="The dataset type to load: 'hnc' for the standard HNC dataset, 'coco' for COCO-style paired data.")
+    parser.add_argument("--output_csv", type=str, default="result_scores.csv",
+                        help="Path to write the results CSV file")
     args = parser.parse_args()
 
-    set_determinism(seed=42)
+    set_all_seeds(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == 'cpu':
         logging.warning("‼️⚠️CUDA not available — running on CPU.")
@@ -105,12 +105,12 @@ def main():
 
     test_loader, test_dataset = load_split(
         args.test_json,
-        'test',
+        'val',
         args.images_path,
         tokenizer,
         preprocess,
         args.batch_size,
-        subset_size=1000,
+        subset_size=10000,
         loader_type=args.loader_type
     )
     print(f"Test Dataset size: {len(test_dataset)}")
@@ -135,7 +135,7 @@ def main():
         if method == 'cosine':
             avg_pos, avg_neg, margin = evaluate_cosine_similarities(model, test_loader, device)
             print(f"Model: {model_name} | Eval: cosine")
-            print(f"  Avg_Pos: {avg_pos:.8f}, Avg_Neg: {avg_neg:.8f}, Margin: {margin:.8f}")
+            print(f"  Avg_Pos: {avg_pos:.4f}, Avg_Neg: {avg_neg:.4f}, Margin: {margin:.4f}")
             results.append({
                 'Model': model_name,
                 'Eval_Method': 'cosine',
@@ -155,7 +155,7 @@ def main():
                 plot_path=f"combined_similarity_matrix_{model_name}.png"
             )
             print(f"Model: {model_name} | Eval: plot")
-            print(f"  Avg_Pos: {avg_pos:.8f}, Avg_Neg: {avg_neg:.8f}, Margin: {margin:.8f}")
+            print(f"  Avg_Pos: {avg_pos:.4f}, Avg_Neg: {avg_neg:.4f}, Margin: {margin:.4f}")
             results.append({
                 'Model': model_name,
                 'Eval_Method': 'plot',
@@ -165,11 +165,11 @@ def main():
             })
 
         elif method == 'random':
-            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(
+            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negative(
                 model, test_loader, device
             )
             print(f"Model: {model_name} | Eval: random")
-            print(f"  Avg_Pos: {avg_pos:.8f}, Avg_Neg: {avg_neg:.8f}, Avg_Rand_Neg: {avg_rand_neg:.8f}, Margin: {margin:.8f}")
+            print(f"  Avg_Pos: {avg_pos:.4f}, Avg_Neg: {avg_neg:.4f}, Avg_Rand_Neg: {avg_rand_neg:.4f}, Margin: {margin:.4f}")
             results.append({
                 'Model': model_name,
                 'Eval_Method': 'random',
@@ -179,39 +179,34 @@ def main():
                 'Avg_Rand_Neg': avg_rand_neg
             })
 
-        elif method == 'distinguish':
-            ratios = get_caption_ratios(model, test_loader, device)
-            total = len(ratios)
-            row = {
-                'Model': model_name,
-                'Eval_Method': 'distinguish'
-            }
-            for th in thresholds:
-                correct = sum(1 for r in ratios if r >= th)
-                acc = correct / total if total > 0 else 0.0
-                row[f"threshold_{th}"] = acc
-            print(f"Model: {model_name} | Eval: distinguish | thresholds: {thresholds}")
+        elif method == 'thresholds':
+            accs = evaluate_thresholds_accuracy(
+                model, test_loader, device, thresholds
+            )
+            print(f"Model: {model_name} | Eval: thresholds")
+            row = {'Model': model_name}
+            for th, a in accs.items():
+                print(f"  Acc@{th}: {a:.4f}")
+                row[f"Acc@{th}"] = round(a, 4)
             results.append(row)
 
-        elif method == 'random+distinguish':
-            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(
-                model, test_loader, device
+        elif method == 'random+thresholds':
+            avg_pos, avg_neg, avg_rand, margin, accs = evaluate_random_and_thresholds(
+                model, test_loader, device, thresholds
             )
-            ratios = get_caption_ratios(model, test_loader, device)
-            total = len(ratios)
+            # print(f"Model: {model_name} | Eval: random+thresholds")
+            # print(f"  Avg_Pos: {avg_pos:.4f}, Avg_Neg: {avg_neg:.4f}, "
+            #       f"Avg_Rand_Neg: {avg_rand:.4f}, Margin: {margin:.4f}")
             row = {
                 'Model': model_name,
-                'Eval_Method': 'random+distinguish',
-                'Avg_Pos': avg_pos,
-                'Avg_Neg': avg_neg,
-                'Avg_Rand_Neg': avg_rand_neg,
-                'Margin': margin
+                'Avg_Pos': round(avg_pos, 4),
+                'Avg_Neg': round(avg_neg, 4),
+                'Avg_Rand_Neg': round(avg_rand, 4),
+                'Margin': round(margin, 4)
             }
-            for th in thresholds:
-                correct = sum(1 for r in ratios if r >= th)
-                acc = correct / total if total > 0 else 0.0
-                row[f"threshold_{th}"] = acc
-            print(f"Model: {model_name} | Eval: random+distinguish | thresholds: {thresholds}")
+            for th, a in accs.items():
+                print(f"  Acc@{th}: {a:.4f}")
+                row[f"Acc@{th}"] = round(a, 4)
             results.append(row)
 
         else:
@@ -219,20 +214,15 @@ def main():
 
 
     df = pd.DataFrame(results).drop(columns=['Eval_Method'], errors='ignore')
-    ordered = [
-        'Model',
-        'Avg_Pos',
-        'Avg_Neg',
-        'Margin',
-        'Avg_Rand_Neg'
-    ] + [f'threshold_{th}' for th in thresholds]
-    ordered = [c for c in ordered if c in df.columns]
-    df = df[ordered]
+    df = df.round(4)
+    cols = ['Model', 'Avg_Pos', 'Avg_Neg', 'Margin', 'Avg_Rand_Neg'] + \
+           [f"Acc@{th}" for th in thresholds]
+    cols = [c for c in cols if c in df.columns]
+    df = df[cols]
 
     print(df.to_string(index=False))
-    csv_path = 'result_scores.csv'
-    df.to_csv(csv_path, index=False)
-    print(f"✅ Saved results to '{csv_path}'")
+    df.to_csv(args.output_csv, index=False)
+    print(f"✅ Saved results to '{args.output_csv}'")
 
 if __name__ == "__main__":
     main()
