@@ -156,7 +156,7 @@ def get_dataset(json_path, image_folder_path, tokenizer, transform, train_batch_
         loader = DataLoader(
             ds,
             batch_size=train_batch_size,
-            shuffle=False
+            shuffle=True
         )
     
     logging.info(f"Dataset '{dataset}' loaded with {len(ds)} samples.")
@@ -189,6 +189,8 @@ def load_split(json_path, dataset_type, image_folder_path, tokenizer, transform,
         )
 
 def deduplicate_and_refill(batch, dataset, device, batch_size, mode=None):
+    base_dataset = getattr(dataset, 'dataset', dataset)
+
     paths = batch["image_path"]
     pixs  = batch["pixel_values"]
     poss  = batch["pos_text"]
@@ -208,21 +210,21 @@ def deduplicate_and_refill(batch, dataset, device, batch_size, mode=None):
 
     num_missing = batch_size - len(unique_idxs)
     if num_missing > 0:
-        all_idxs = set(range(len(dataset)))
+        all_idxs = set(range(len(base_dataset.data_pairs)))
         seen_set_idxs = {
-            idx for idx, (img_p, _, _) in enumerate(dataset.data_pairs)
+            idx for idx, (img_p, _, _) in enumerate(base_dataset.data_pairs)
             if img_p in seen
         }
         candidates = list(all_idxs - seen_set_idxs)
         extra = random.sample(candidates, num_missing)
         for idx in extra:
-            img_p, pos_cap, neg_cap = dataset.data_pairs[idx]
+            img_p, pos_cap, neg_cap = base_dataset.data_pairs[idx]
 
             img = Image.open(img_p).convert("RGB")
-            if dataset.transform:
-                img = dataset.transform(img)
-            pos_tok = dataset.tokenizer([pos_cap])[0]
-            neg_tok = dataset.tokenizer([neg_cap])[0]
+            if base_dataset.transform:
+                img = base_dataset.transform(img)
+            pos_tok = base_dataset.tokenizer([pos_cap])[0]
+            neg_tok = base_dataset.tokenizer([neg_cap])[0]
 
             unique_pix.append(img)
             unique_pos.append(pos_tok)
