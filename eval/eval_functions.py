@@ -14,7 +14,7 @@ def compute_cosine_similarities(
     device: torch.device,
     return_embeddings: bool = False
 ):
-    imgs     = batch["pixel_values"].to(device)
+    imgs = batch["pixel_values"].to(device)
     pos_txts = batch["pos_text"].to(device)
     neg_txts = batch["neg_text"].to(device)
 
