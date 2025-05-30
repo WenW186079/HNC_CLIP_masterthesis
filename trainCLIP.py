@@ -14,7 +14,7 @@ import clip
 
 from loss_func import StandardCLIPLoss, CLIPLossL2, CLIPLossKL, DPOCLIPLoss, DPOContrastiveCLIPLoss, CombinedCLIPDPOLoss
 from load_data import deduplicate_and_refill
-from eval.eval_functions import evaluate_cosine_similarities,evaluate_cosine_similarities_and_plot,evaluate_cosine_similarities_random_negtive
+from eval.eval_functions import evaluate_cosine_similarities,evaluate_cosine_similarities_and_plot,evaluate_cosine_similarities_random_negative
 
 def set_trainable_parameters(model, finetune_mode):
     if finetune_mode == "text_encoder":
@@ -478,7 +478,7 @@ def train_clip_model(
             # # ---- Begin Validation Step ----
             # if val_loader is not None and (global_step % val_step_frequency == 0):
             #     model_to_eval = model_engine.module if hasattr(model_engine, "module") else model_engine
-            #     avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(model_to_eval, val_loader, device)
+            #     avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negative(model_to_eval, val_loader, device)
             #     if dist.get_rank() == 0:
             #         wandb.log({
             #             "val/avg_pos": avg_pos,
@@ -498,17 +498,17 @@ def train_clip_model(
         if checkpoint_dir is not None and dist.get_rank() == 0 :
             save_checkpoint(model_engine, optimizer, epoch + 1, checkpoint_dir, finetune_mode, filename=None)
         
-        # ---- Begin Validation Step ----
-        if val_loader is not None:
-            model_to_eval = model_engine.module if hasattr(model_engine, "module") else model_engine
-            avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negtive(model_to_eval, val_loader, device)
-            if dist.get_rank() == 0:
-                wandb.log({
-                    "val/avg_pos": avg_pos,
-                    "val/avg_neg": avg_neg,
-                    "val/random_neg": avg_rand_neg,
-                    "val/margin": margin,
-                })
-            # ---- End Validation Step ----
+        # # ---- Begin Validation Step ----
+        # if val_loader is not None:
+        #     model_to_eval = model_engine.module if hasattr(model_engine, "module") else model_engine
+        #     avg_pos, avg_neg, avg_rand_neg, margin = evaluate_cosine_similarities_random_negative(model_to_eval, val_loader, device)
+        #     if dist.get_rank() == 0:
+        #         wandb.log({
+        #             "val/avg_pos": avg_pos,
+        #             "val/avg_neg": avg_neg,
+        #             "val/random_neg": avg_rand_neg,
+        #             "val/margin": margin,
+        #         })
+        #     # ---- End Validation Step ----
         
     wandb.finish()
