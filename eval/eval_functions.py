@@ -6,6 +6,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 import random
 import matplotlib.pyplot as plt
+import pandas as pd
 
 def compute_cosine_similarities(
     model,
@@ -207,3 +208,57 @@ def evaluate_random_and_thresholds(
     )
     accs = evaluate_thresholds_accuracy(model, eval_loader, device, thresholds)
     return avg_pos, avg_neg, avg_rand_neg, margin, accs
+
+def evaluate_by_type_random_thresholds_total(model, type_wrapper, device, thresholds, batch_size):
+    results = []
+    all_loaders = type_wrapper.get_all_loaders(batch_size=batch_size, shuffle=False)
+
+    total_count = 0
+    agg = {
+        'Avg_Pos': 0.0,
+        'Avg_Neg': 0.0,
+        'Avg_Rand_Neg': 0.0,
+        'Margin': 0.0,
+    }
+    agg_acc = {τ: 0.0 for τ in thresholds}
+
+    for type_name, (loader, count) in all_loaders.items():
+        print(f"\n Evaluating type: {type_name} | Samples: {count}")
+        avg_pos, avg_neg, avg_rand, margin, accs = evaluate_random_and_thresholds(
+            model, loader, device, thresholds
+        )
+
+        row = {
+            'Type': type_name,
+            'Avg_Pos': round(avg_pos, 4),
+            'Avg_Neg': round(avg_neg, 4),
+            'Avg_Rand_Neg': round(avg_rand, 4),
+            'Margin': round(margin, 4)
+        }
+        for τ in thresholds:
+            row[f"Acc@{τ}"] = round(accs[τ], 4)
+            agg_acc[τ] += accs[τ] * count
+
+        agg['Avg_Pos'] += avg_pos * count
+        agg['Avg_Neg'] += avg_neg * count
+        agg['Avg_Rand_Neg'] += avg_rand * count
+        agg['Margin'] += margin * count
+        total_count += count
+
+        results.append(row)
+
+    if total_count > 0:
+        avg_row = {
+            'Type': 'ALL',
+            'Avg_Pos': round(agg['Avg_Pos'] / total_count, 4),
+            'Avg_Neg': round(agg['Avg_Neg'] / total_count, 4),
+            'Avg_Rand_Neg': round(agg['Avg_Rand_Neg'] / total_count, 4),
+            'Margin': round(agg['Margin'] / total_count, 4)
+        }
+        for τ in thresholds:
+            avg_row[f"Acc@{τ}"] = round(agg_acc[τ] / total_count, 4)
+
+        results.append(avg_row)
+
+    df = pd.DataFrame(results)
+    return df
