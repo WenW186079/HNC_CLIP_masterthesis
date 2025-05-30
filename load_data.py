@@ -239,32 +239,6 @@ def deduplicate_and_refill(batch, dataset, device, batch_size, mode=None):
     else:
         return images, torch.cat([pos_ts, neg_ts], dim=0)
 
-def deduplicate_batch(batch, device, mode=None):
-    seen = set()
-    unique_pixel_values = []
-    unique_pos_texts = []
-    unique_neg_texts = []
-
-    for i, path in enumerate(batch["image_path"]):
-        if path not in seen:
-            seen.add(path)
-            unique_pixel_values.append(batch["pixel_values"][i])
-            unique_pos_texts.append(batch["pos_text"][i])
-            unique_neg_texts.append(batch["neg_text"][i])
-    
-    images = torch.stack(unique_pixel_values).to(device)
-    pos_text_inputs = torch.stack(unique_pos_texts).to(device)
-    neg_text_inputs = torch.stack(unique_neg_texts).to(device)
-    
-    if mode.lower() == 'standard':
-        text_inputs = pos_text_inputs
-    elif mode.lower() == 'hnc_l2' or mode.lower() == 'hnc_kl'  or mode.lower() == 'dpo_kl' or mode.lower() == 'contrastive_dpo_kl'  or mode.lower() == 'contrastive_dpo_l2':
-        text_inputs = torch.cat([pos_text_inputs, neg_text_inputs], dim=0)
-    else:
-        print('No such mode')
-    
-    return images, text_inputs
-
 
 def split_train_val(dataset, val_size=1000, seed=42):
     from torch.utils.data import random_split
@@ -330,7 +304,6 @@ class LoadCOCOPair(Dataset):
             "pos_text": pos_tokens,   # tokenized positive caption
             "neg_text": neg_tokens    # tokenized negative caption
         }
-
 
 
 def get_dataset_COCO(json_path, image_folder_path, tokenizer, transform, batch_size, subset_size=None):
