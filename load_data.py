@@ -1,16 +1,16 @@
 import os
+import random
+import json
 import logging
 from PIL import Image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, Sampler, DataLoader, DistributedSampler,Subset
-import random
 import torch.distributed as dist
-import json
+from collections import defaultdict, Counter
 
-from functools import partial
-
+      
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  
 console_handler = logging.StreamHandler()
@@ -21,9 +21,6 @@ logger.addHandler(console_handler)
 
 class LoadCLIPDataset(Dataset):
     def __init__(self, annotations, image_folder, tokenizer, transform, is_test=False):
-        """
-        Initializes the dataset by creating (image_path, positive_caption, negative_caption) pairs.
-        """
         self.annotations = annotations
         self.image_folder = image_folder
         self.tokenizer = tokenizer
@@ -32,93 +29,90 @@ class LoadCLIPDataset(Dataset):
         self.data_pairs = []
         self.hnc_count = 0
         self.positive_count = 0
-
+        self.negative_count = 0
+        self.skipped_pos = 0
+        self.skipped_neg = 0
         missing_images_count = 0
 
         for img_key, data in annotations.items():
-            if self.is_test:
-                image_filename = img_key
-                captions_dict = data
-            else:
-                image_filename = f"{img_key}.jpg"
-                captions_dict = data.get("captions", {})
-
+            image_filename = img_key if is_test else f"{img_key}.jpg"
+            captions_dict = data if is_test else data.get("captions", {})
             image_path = os.path.join(self.image_folder, image_filename)
-            if os.path.exists(image_path):
-                if self.is_test:
-                    # Group captions by type.
-                    type_groups = {}
-                    for cap_id, cap_data in captions_dict.items():
-                        cap_type = cap_data.get("type", "default")
-                        type_groups.setdefault(cap_type, []).append((cap_id, cap_data))
-                    
-                    for cap_type, cap_list in type_groups.items():
-                        # Separate positive and negative captions.
-                        pos_list = [(cap_id, cap_data) for cap_id, cap_data in cap_list if cap_data["label"] == 1]
-                        neg_list = [(cap_id, cap_data) for cap_id, cap_data in cap_list if cap_data["label"] == 0]
-                        try:
-                            pos_list.sort(key=lambda x: int(x[0]))
-                            neg_list.sort(key=lambda x: int(x[0]))
-                        except ValueError:
-                            pass
 
-                        if len(pos_list) != len(neg_list):
-                            # logger.warning(f"Unequal positives and negatives for {image_filename} in type '{cap_type}'. Skipping.")
-                            continue
-
-                        for ((pos_cap_id, pos_data), (neg_cap_id, neg_data)) in zip(pos_list, neg_list):
-                            pos_caption = pos_data["caption"]
-                            neg_caption = neg_data["caption"]
-                            self.data_pairs.append((image_path, pos_caption, neg_caption))
-                            self.hnc_count += 1
-                            self.positive_count += 1
-                else:
-                    pos_caption_map = {
-                        cap_id: cap_data["caption"]
-                        for cap_id, cap_data in captions_dict.items() if cap_data["label"] == 1
-                    }
-                    self.positive_count += len(pos_caption_map)
-                    for cap_id, cap_data in captions_dict.items():
-                        if cap_data["label"] == 0:
-                            neg_caption = cap_data["caption"]
-                            cpt_p_id = cap_data.get("cpt_p_id")
-                            if not cpt_p_id:
-                                # logger.warning(f"Missing cpt_p_id for cap_id {cap_id} in {image_filename}. Skipping.")
-                                continue
-                            cpt_p_id = str(cpt_p_id)
-                            if cpt_p_id not in pos_caption_map:
-                                # logger.warning(f"Invalid cpt_p_id {cpt_p_id} in image {image_filename}.")
-                                continue
-                            else:
-                                pos_caption = pos_caption_map[cpt_p_id]
-                                self.data_pairs.append((image_path, pos_caption, neg_caption))
-                                self.hnc_count += 1
-            else:
+            if not os.path.exists(image_path):
                 missing_images_count += 1
                 logger.warning(f"Missing image: {image_path}")
+                continue
 
-        logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
-        logger.info(f"Total Positive samples: {self.positive_count}")
-        logger.info(f"Total HNC samples: {self.hnc_count}")
+            if is_test:
+                sorted_caps = sorted(captions_dict.items(), key=lambda x: int(x[0]))
+                last_pos = None
+
+                for _, cap_data in sorted_caps:
+                    label = cap_data.get("label")
+                    caption = cap_data.get("caption")
+                    if not caption:
+                        continue
+
+                    if label == 1:
+                        self.positive_count += 1
+                        last_pos = caption
+                    elif label == 0:
+                        self.negative_count += 1
+                        if last_pos:
+                            self.data_pairs.append((image_path, last_pos, caption))
+                            self.hnc_count += 1
+                            last_pos = None
+                        else:
+                            self.skipped_neg += 1
+
+                if last_pos and (len(self.data_pairs) == 0 or self.data_pairs[-1][1] != last_pos):
+                    self.skipped_pos += 1
+
+            else:
+                pos_caption_map = {
+                    cap_id: cap_data["caption"]
+                    for cap_id, cap_data in captions_dict.items()
+                    if cap_data.get("label") == 1
+                }
+                self.positive_count += len(pos_caption_map)
+
+                for cap_id, cap_data in captions_dict.items():
+                    if cap_data.get("label") == 0:
+                        self.negative_count += 1
+                        neg_caption = cap_data.get("caption")
+                        cpt_p_id = str(cap_data.get("cpt_p_id", ""))
+                        if not neg_caption or cpt_p_id not in pos_caption_map:
+                            self.skipped_neg += 1
+                            continue
+                        pos_caption = pos_caption_map[cpt_p_id]
+                        self.data_pairs.append((image_path, pos_caption, neg_caption))
+                        self.hnc_count += 1
+
+        logger.info(f"✅ Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}")
+        logger.info(f"📊 Total positive captions: {self.positive_count}, Total negative captions: {self.negative_count}")
+        logger.info(f"🚫 Skipped positives: {self.skipped_pos}, Skipped negatives: {self.skipped_neg}")
+        logger.info(f"✅ HNC pairs created: {self.hnc_count}")
 
     def __len__(self):
         return len(self.data_pairs)
 
     def __getitem__(self, idx):
         image_path, pos_caption, neg_caption = self.data_pairs[idx]
-
         image = Image.open(image_path).convert("RGB")
         if self.transform:
             image = self.transform(image)
-    
+
         pos_tokens = self.tokenizer([pos_caption])[0]
         neg_tokens = self.tokenizer([neg_caption])[0]
+
         return {
             "image_path": image_path,
-            "pixel_values": image,      # image tensor (preprocessed)
-            "pos_text": pos_tokens,     # positive caption tokens
-            "neg_text": neg_tokens      # negative caption tokens
+            "pixel_values": image,
+            "pos_text": pos_tokens,
+            "neg_text": neg_tokens
         }
+
 
 def get_dataset(json_path, image_folder_path, tokenizer, transform, train_batch_size, dataset='train', subset_size=None):
     """
@@ -264,8 +258,6 @@ class LoadCOCOPair(Dataset):
 
         missing_images_count = 0
 
-        logger.info("Creating COCO image-POS-NEG pairs...")
-
         for data in annotations:
             image_filename = data.get("image")
             image_path = os.path.join(self.image_folder, image_filename)
@@ -282,9 +274,9 @@ class LoadCOCOPair(Dataset):
                 missing_images_count += 1
                 logger.warning(f"❗️Missing image: {image_path}")
 
-        logger.info(f"Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
-        logger.info(f"Total Pos samples: {self.positive_count}")
-        logger.info(f"Total COCO NEG samples: {self.neg_count}")
+        logger.info(f"✅ Finished creating pairs. Total pairs: {len(self.data_pairs)}. Missing images: {missing_images_count}.")
+        logger.info(f"📊 Total Pos samples: {self.positive_count}")
+        logger.info(f"📊 Total COCO NEG samples: {self.neg_count}")
 
     def __len__(self):
         return len(self.data_pairs)
@@ -330,3 +322,110 @@ def get_dataset_COCO(json_path, image_folder_path, tokenizer, transform, batch_s
     
     logging.info(f"COCO Dataset loaded with {len(ds)} samples.")
     return loader, ds
+
+class TestTypeDataset(Dataset):
+    def __init__(self, json_path, image_folder, tokenizer, transform):
+        """
+        Dataset for CLIP test evaluation with caption 'type'.
+        """
+        self.samples = []
+        self.skipped_pos = 0
+        self.skipped_neg = 0
+        self.total_pos = 0
+        self.total_neg = 0
+        self.tokenizer = tokenizer
+        self.transform = transform
+
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+
+        for img_name, cap_dict in data.items():
+            img_path = os.path.join(image_folder, img_name)
+            if not os.path.exists(img_path):
+                continue
+
+            sorted_caps = sorted(cap_dict.items(), key=lambda x: int(x[0]))
+            last_pos = None
+
+            for cap_id, cap_data in sorted_caps:
+                label = cap_data.get("label")
+                caption = cap_data.get("caption")
+
+                if not caption or not isinstance(caption, str) or caption.strip() == "":
+                    continue
+
+                if label == 1:
+                    self.total_pos += 1
+                    last_pos = (cap_data, cap_data.get("type"), caption)
+                elif label == 0:
+                    self.total_neg += 1
+                    if last_pos:
+                        pos_data, cap_type, pos_caption = last_pos
+                        neg_caption = caption
+                        cap_type = cap_type or cap_data.get("type") or "unknown"
+
+                        self.samples.append({
+                            "image_path": img_path,
+                            "pos_caption": pos_caption,
+                            "neg_caption": neg_caption,
+                            "type": cap_type,
+                            "image_id": img_name
+                        })
+                        last_pos = None
+                    else:
+                        self.skipped_neg += 1
+            if last_pos and (len(self.samples) == 0 or self.samples[-1]["pos_caption"] != last_pos[2]):
+                self.skipped_pos += 1
+
+        type_counter = Counter([s["type"] for s in self.samples])
+        print(f"Sample count by type:\n{dict(type_counter)}")
+        print(f"✅ Loaded {len(self.samples)} valid caption pairs.")
+        print(f"📊 Total positive captions: {self.total_pos}, Total negative captions: {self.total_neg}")
+        print(f"🚫 Skipped positives: {self.skipped_pos}, Skipped negatives: {self.skipped_neg}")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        image = Image.open(sample["image_path"]).convert("RGB")
+        if self.transform:
+            image = self.transform(image)
+
+        pos_text = self.tokenizer([sample["pos_caption"]])[0]
+        neg_text = self.tokenizer([sample["neg_caption"]])[0]
+
+        return {
+            "image_path": sample["image_path"],
+            "pixel_values": image,
+            "pos_text": pos_text,
+            "neg_text": neg_text,
+            "type": sample["type"]
+        }
+
+
+class TypeTestDatasetWrapper:
+        def __init__(self, dataset):
+            self.dataset = dataset
+            self.type_to_indices = defaultdict(list)
+
+            for idx in range(len(dataset)):
+                item = dataset[idx]
+                sample_type = item.get("type", "unknown")
+                self.type_to_indices[sample_type].append(idx)
+
+            self.types = list(self.type_to_indices.keys())
+
+        def get_loader_for_type(self, type_name, batch_size=32, shuffle=False):
+            indices = self.type_to_indices.get(type_name, [])
+            subset = Subset(self.dataset, indices)
+            return DataLoader(subset, batch_size=batch_size, shuffle=shuffle), len(subset)
+
+        def get_all_types(self):
+            return self.types
+
+        def get_all_loaders(self, batch_size=32, shuffle=False):
+            return {
+                t: self.get_loader_for_type(t, batch_size, shuffle)
+                for t in self.types
+            }
