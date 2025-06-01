@@ -110,7 +110,7 @@ def main():
         tokenizer,
         preprocess,
         args.batch_size,
-        subset_size=10000,
+        subset_size=1000,
         loader_type=args.loader_type
     )
     print(f"Test Dataset size: {len(test_dataset)}")
