@@ -325,63 +325,43 @@ def get_dataset_COCO(json_path, image_folder_path, tokenizer, transform, batch_s
 
 class TestTypeDataset(Dataset):
     def __init__(self, json_path, image_folder, tokenizer, transform):
-        """
-        Dataset for CLIP test evaluation with caption 'type'.
-        """
         self.samples = []
-        self.skipped_pos = 0
-        self.skipped_neg = 0
-        self.total_pos = 0
-        self.total_neg = 0
         self.tokenizer = tokenizer
         self.transform = transform
 
         with open(json_path, 'r') as f:
             data = json.load(f)
 
-        for img_name, cap_dict in data.items():
-            img_path = os.path.join(image_folder, img_name)
+        for image_id, caption_dict in data.items():
+            img_path = os.path.join(image_folder, image_id)
             if not os.path.exists(img_path):
                 continue
 
-            sorted_caps = sorted(cap_dict.items(), key=lambda x: int(x[0]))
-            last_pos = None
+            sorted_items = sorted(caption_dict.items(), key=lambda x: int(x[0]))
+            for i in range(0, len(sorted_items) - 1, 2):
+                a_idx, a_data = sorted_items[i]
+                b_idx, b_data = sorted_items[i + 1]
 
-            for cap_id, cap_data in sorted_caps:
-                label = cap_data.get("label")
-                caption = cap_data.get("caption")
+                if a_data["label"] == 1 and b_data["label"] == 0:
+                    pos_caption = a_data["caption"]
+                    neg_caption = b_data["caption"]
+                    pair_type = b_data.get("type", "unknown")
+                elif a_data["label"] == 0 and b_data["label"] == 1:
+                    pos_caption = b_data["caption"]
+                    neg_caption = a_data["caption"]
+                    pair_type = a_data.get("type", "unknown")
+                else:
+                    continue 
 
-                if not caption or not isinstance(caption, str) or caption.strip() == "":
-                    continue
+                self.samples.append({
+                    "image_path": img_path,
+                    "pos_caption": pos_caption,
+                    "neg_caption": neg_caption,
+                    "type": pair_type,
+                    "image_id": image_id
+                })
 
-                if label == 1:
-                    self.total_pos += 1
-                    last_pos = (cap_data, cap_data.get("type"), caption)
-                elif label == 0:
-                    self.total_neg += 1
-                    if last_pos:
-                        pos_data, cap_type, pos_caption = last_pos
-                        neg_caption = caption
-                        cap_type = cap_type or cap_data.get("type") or "unknown"
-
-                        self.samples.append({
-                            "image_path": img_path,
-                            "pos_caption": pos_caption,
-                            "neg_caption": neg_caption,
-                            "type": cap_type,
-                            "image_id": img_name
-                        })
-                        last_pos = None
-                    else:
-                        self.skipped_neg += 1
-            if last_pos and (len(self.samples) == 0 or self.samples[-1]["pos_caption"] != last_pos[2]):
-                self.skipped_pos += 1
-
-        type_counter = Counter([s["type"] for s in self.samples])
-        print(f"Sample count by type:\n{dict(type_counter)}")
-        print(f"✅ Loaded {len(self.samples)} valid caption pairs.")
-        print(f"📊 Total positive captions: {self.total_pos}, Total negative captions: {self.total_neg}")
-        print(f"🚫 Skipped positives: {self.skipped_pos}, Skipped negatives: {self.skipped_neg}")
+        print(f"✅ Loaded {len(self.samples)} valid caption pairs from JSON.")
 
     def __len__(self):
         return len(self.samples)
@@ -402,7 +382,6 @@ class TestTypeDataset(Dataset):
             "neg_text": neg_text,
             "type": sample["type"]
         }
-
 
 class TypeTestDatasetWrapper:
         def __init__(self, dataset):
