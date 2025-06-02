@@ -120,7 +120,7 @@ class CLIPLossL2(nn.Module):
         # Create target labels: for each image i, the matching positive caption is assumed to be at index i.
         labels = torch.arange(B, device=device, dtype=torch.long)
 
-        # Compute the image-to-text loss using the weighted logits.
+        
         loss_i2t = F.cross_entropy(weighted_logits, labels)
         loss_t2i = F.cross_entropy(pos_logits.t(), labels)
 
