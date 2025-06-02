@@ -3,17 +3,14 @@
 cd "$(dirname "$0")/.."
 PROJECT_ROOT=$(pwd)
 
-
 paths=(
-
-  # "$PROJECT_ROOT/models/HNC_KL_1_100k_full_20/epoch_12_full_encoder.pt" 
-
+   "$PROJECT_ROOT/models/C_DPO_KL_S_full.pt" 
 )
 CHECKPOINTS="${paths[*]}"
-OUTPUT_CSV="./coco_05.csv"
+OUTPUT_CSV="./test.csv"
 
 MODEL_TYPE="finetuned"              # "base","finetuned"
-FINETUNE_TYPE='vision_encoder'        # 'text_encoder','vision_encoder','full_encoder',"last_encoder"
+FINETUNE_TYPE='full_encoder'        # 'text_encoder','vision_encoder','full_encoder',"last_encoder"
 EVAL_METHOD="random+thresholds"    # "cosine", "plot", "random", "thresholds", 'random+thresholds'
 MODEL_NAME="ViT-B/32"
 BATCH_SIZE=32
