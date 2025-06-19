@@ -33,12 +33,12 @@ It computes the standard CLIP contrastive loss and a DPO logistic loss on (image
 # Select finetuning parameters
 Control which parts of CLIP are trainable:
 
-| Mode                   | Token Embedding | Text Encoder    | Text Projection | Vision Encoder   | Vision Projection |
-|------------------------|-----------------|-----------------|-----------------|------------------|-------------------|
-| **text_encoder**       | True            | True            | True            | –                | -                 |
-| **vision_encoder**     | –               | –               | –               | True             | True              |
-| **full_encoder**       | True            | True            | True            | True             | True              |
-| **last_encoder**       | –               | True (last block)| –              | True (last block)| –                 |
+| Mode                   | Text Encoder    | Text Projection | Vision Encoder   | Vision Projection |
+|------------------------|-----------------|-----------------|------------------|-------------------|
+| **text_encoder**       | True            | True            | –                | -                 |
+| **vision_encoder**     | –               | –               | True             | True              |
+| **full_encoder**       | True            | True            | True             | True              |
+| **last_encoder**       | True (last block)| –              | True (last block)| –                 |
 
 
 # Experiments
