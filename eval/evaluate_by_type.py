@@ -12,11 +12,11 @@ sys.path.insert(0, PROJECT_ROOT)
 from load_data import TestTypeDataset, TypeTestDatasetWrapper
 
 #  =========================================
-# CHECKPOINT_PATH = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/models/HNC1_SKL_F_1M/epoch_10_full_encoder.pt"
+# CHECKPOINT_PATH = "./models/HNC1_SKL_F_1M/epoch_10_full_encoder.pt"
 CHECKPOINT_PATH =  "base"
 MODEL_NAME = "ViT-B/32"
-TEST_JSON = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/data/HNC/filtered_test_data.json"
-IMAGES_PATH = "/mount/arbeitsdaten/deepfake/SpeechTechnology2023/ww/data/thes/data/gqa_dataset/images/images"
+TEST_JSON = "./thes/data/HNC/filtered_test_data.json"
+IMAGES_PATH = "./thes/data/gqa_dataset/images/images"
 OUTPUT_CSV = "./eval_by_type_result.csv"
 BATCH_SIZE = 32
 THRESHOLDS = [1, 1.1, 1.2, 1.5, 2, 3]
