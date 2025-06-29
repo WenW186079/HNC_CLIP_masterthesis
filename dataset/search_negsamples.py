@@ -3,9 +3,7 @@ import json
 json_file_path = './HNC/hnc_clean_strict_val.json'
 
 def search_hnc_negatives(json_file_path, target_image_id, target_caption):
-    """
-    Efficiently search for HNC negative captions in a large JSON file.
-    """
+
     with open(json_file_path, 'r') as f:
         annotations = json.load(f)  
         if target_image_id not in annotations:
