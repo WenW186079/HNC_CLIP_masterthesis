@@ -1,7 +1,5 @@
 # HNC_CLIP_masterthesis
-This repository accompanies the master's thesis **"Enhancing Relational Understanding in CLIP Leveraging Hard Negative Captions (HNC)"**.
-
-## Overview
+This repository accompanies the master's thesis **"Enhancing Relational Understanding in CLIP Leveraging Hard Negative Captions"**.
 
 The goal of this project is to enhance CLIP’s relational reasoning capabilities while preserving its strong object recognition performance. This is achieved by fine-tuning CLIP using the **Hard Negative Captions** dataset, which provides image-caption triplets consisting of:
 
