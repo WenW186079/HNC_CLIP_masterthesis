@@ -16,7 +16,7 @@ print(f"Total caption samples available: {total_samples}")
 random.seed(42)
 
 if total_samples < 1000:
-    print("Warning: Fewer than 1000 samples available. Using all samples for validation.")
+    print("Warning: Fewer than 1000 samples available.")
     val_pairs = set(caption_pairs)
 else:
     val_pairs = set(random.sample(caption_pairs, 1000))
