@@ -7,7 +7,7 @@ dataset:
 training:
   model_name: "ViT-B/32"
   num_epochs: 10
-  train_size: 1000000
+  train_size: 100000
 
   learning_rate: 5.0e-6
   weight_decay: 0.0001
