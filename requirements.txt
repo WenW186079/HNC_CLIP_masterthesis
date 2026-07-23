@@ -71,7 +71,7 @@ orjson==3.10.15
 packaging==24.2
 pandas==2.2.3
 peft==0.14.0
-pillow==10.4.0
+# pillow==10.4.0
 platformdirs==4.3.6
 protobuf==5.29.3
 psutil==6.1.1
